@@ -14,6 +14,8 @@ import attendanceWeekTotalHoursRouter from './attendance/week-total-hours'
 import attendanceUserMonthRouter from './attendance/user-month';
 import attendanceGetUserDateSessions from './attendance/get-user-date-work-sessions';
 import attendanceUpdateUserDateSessions from './attendance/update-user-date-work-sessions';
+import dailyReportsListRouter from './daily-reports/list';
+
 
 const database = new Hono<{ Bindings: Env }>();
 
@@ -31,5 +33,7 @@ database.route('/attendance/clock-out', attendanceClockOutRouter);
 database.route('/attendance/break-start', attendanceBreakStartRouter);
 database.route('/attendance/break-end', attendanceBreakEndRouter);
 database.route('/attendance/week-total-hours', attendanceWeekTotalHoursRouter);
+database.route('/daily-reports/list', dailyReportsListRouter);
+
 
 export default database;

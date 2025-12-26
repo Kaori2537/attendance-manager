@@ -1,0 +1,33 @@
+﻿# Local env files
+backend/.env
+backend/.env.*
+frontend/.env.local
+frontend/.env.*local
+
+# dependencies
+node_modules/
+**/node_modules/
+
+# env
+.env
+.env.*
+!.env.example
+
+# build outputs
+.next/
+dist/
+out/
+.wrangler/
+
+# supabase local (if you don't want to commit local runtime)
+supabase/.temp/
+supabase/.branches/
+supabase/.cache/
+supabase/.env
+
+# logs
+*.log
+
+# local test artifacts
+resp*.json
+daily_reports*.json

@@ -140,6 +140,69 @@ export type Database = {
           },
         ]
       }
+      daily_reports: {
+  Row: {
+    id: string
+    user_id: string
+    report_date: string
+    content: string
+    created_at: string
+    updated_at: string
+  }
+  Insert: {
+    id?: string
+    user_id: string
+    report_date: string
+    content: string
+    created_at?: string
+    updated_at?: string
+  }
+  Update: {
+    id?: string
+    user_id?: string
+    report_date?: string
+    content?: string
+    created_at?: string
+    updated_at?: string
+  }
+  Relationships: []
+},
+
+      actual_tasks: {
+        Row: {
+          id: string
+          attendance_id: string
+          task_name: string
+          actual_hours: number
+          task_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          attendance_id: string
+          task_name: string
+          actual_hours: number
+          task_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          attendance_id?: string
+          task_name?: string
+          actual_hours?: number
+          task_order?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actual_tasks_attendance_id_fkey"
+            columns: ["attendance_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

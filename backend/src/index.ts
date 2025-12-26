@@ -11,3 +11,9 @@ app.route('/auth', authRoute);
 app.route("/database", databaseRoute);
 app.route("/slack", slackRoute)
 export default app
+
+app.get("/__routes", (c) => {
+  // @ts-ignore
+  const routes = app.routes?.map((r: any) => ({ method: r.method, path: r.path })) ?? [];
+  return c.json(routes);
+});

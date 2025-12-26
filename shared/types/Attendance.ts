@@ -44,3 +44,13 @@ export interface Task {
     task: string;
     hours: string;
 }
+
+// Daily Report (standalone)
+export interface DailyReport {
+    id: string;
+    userId: string;
+    reportDate: string; // 'YYYY-MM-DD'
+    content: string;
+    createdAt: string;
+    updatedAt: string;
+}
