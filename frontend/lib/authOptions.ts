@@ -1,53 +1,64 @@
-import { type NextAuthOptions } from "next-auth"
-import Credentials from "next-auth/providers/credentials"
+import { type NextAuthOptions } from "next-auth";
+import Credentials from "next-auth/providers/credentials";
 
 export const authOptions: NextAuthOptions = {
-    providers: [
-        Credentials({
-            name: "Credentials",
-            credentials: {
-                email: { label: "email", type: "text" },
-                password: { label: "password", type: "password" }
-            },
-            async authorize(credentials) {
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        email: credentials?.email,
-                        password: credentials?.password,
-                    }),
-                });
+  providers: [
+    Credentials({
+      name: "Credentials",
+      credentials: {
+        email: { label: "email", type: "text" },
+        password: { label: "password", type: "password" },
+      },
 
-                if (!res.ok) return null;
+      async authorize(credentials) {
+        const url = `${process.env.NEXT_PUBLIC_API_URL}/auth/login`;
 
-                const { token, user } = await res.json();
+        console.log("NEXT_PUBLIC_API_URL:", process.env.NEXT_PUBLIC_API_URL);
+        console.log("login url:", url);
 
-                return { ...user, token };
-            }
-        })
-    ],
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: credentials?.email,
+            password: credentials?.password,
+          }),
+        });
 
-    callbacks: {
-        async jwt({ token, user }) {
-            if (user) {
-                token.id = user.id;
-                token.role = user.role;
-                token.apiToken = user.token; // backend JWT を保存
-            }
-            return token;
-        },
+        const text = await res.text();
+        console.log("login response:", res.status, text);
 
-        async session({ session, token }) {
-            session.user.id = token.id;
-            session.user.role = token.role;
-            session.user.apiToken = token.apiToken; // Session に反映
+        if (!res.ok) return null;
 
-            return session;
-        }
+        const { token, user } = JSON.parse(text);
+
+        return {
+          ...user,
+          token, // backend JWT
+        };
+      },
+    }),
+  ],
+
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = (user as any).id;
+        token.role = (user as any).role;
+        token.apiToken = (user as any).token;
+      }
+      return token;
     },
 
-    pages: {
-        signIn: "/login",
-    }
-}
+    async session({ session, token }) {
+      (session.user as any).id = token.id;
+      (session.user as any).role = token.role;
+      (session.user as any).apiToken = token.apiToken;
+      return session;
+    },
+  },
+
+  pages: {
+    signIn: "/login",
+  },
+};
