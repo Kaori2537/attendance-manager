@@ -1,6 +1,7 @@
 // backend/src/routes/database/daily-reports/list.ts
 import { Hono } from 'hono'
-import { getDailyReportSupabaseClient } from '../../../../lib/supabaseDailyReport'
+import { getDailyReportSupabaseClient } from '../../../lib/supabaseDailyReport'
+
 import { verify } from 'hono/jwt'
 import { Env } from '../../../types/env'
 
