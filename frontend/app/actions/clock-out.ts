@@ -1,52 +1,113 @@
 "use server";
 
-//app/actions/clock-out.ts
-
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
-import { Task } from "../../../shared/types/Attendance";
+import type { Task } from "../../../shared/types/Attendance";
 
-export async function clockOutWithTasks(actualTasks: Task[], summary: string, issues: string, notes: string) {
-    const session = await getServerSession(authOptions);
-    const token = session?.user?.apiToken;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+type TaskInput = { title: string; minutes: number };
 
-    if (!token) throw new Error("Unauthorized");
+function todayYmdJst() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" }); // YYYY-MM-DD
+}
 
-    try {
-        // DB側 clock-out
-        const dbRes = await fetch(`${apiUrl}/database/attendance/clock-out`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-        });
+function toMinutes(hoursLike: unknown): number {
+  const n = typeof hoursLike === "string" ? parseFloat(hoursLike) : Number(hoursLike);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n * 60);
+}
 
-        if (!dbRes.ok) {
-            throw new Error(`Database clock-out failed: ${dbRes.status}`);
-        }
+function mapTasks(tasks: Task[]): TaskInput[] {
+  return (tasks ?? [])
+    .map((t: any) => ({
+      title: String(t?.task ?? t?.title ?? "").trim(),
+      minutes: toMinutes(t?.hours ?? t?.minutes),
+    }))
+    .filter((x) => x.title.length > 0 && x.minutes > 0);
+}
 
-        // Slack通知
-        const slackRes = await fetch(`${apiUrl}/slack/clock-out-report`, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                userName: session.user.name,
-                actualTasks,
-                summary,
-                issues,
-                notes
-            }),
-        });
+export async function clockOutWithTasks(
+  actualTasks: Task[],
+  summary: string,
+  issues: string,
+  notes: string,
+  sessionNo: number
+) {
+  const session = await getServerSession(authOptions);
+  const token = (session?.user as any)?.apiToken as string | undefined;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-        if (!slackRes.ok) {
-            throw new Error(`Slack notification failed: ${slackRes.status}`);
-        }
+  if (!token) return { success: false, error: "Unauthorized" };
+  if (!apiUrl) return { success: false, error: "NEXT_PUBLIC_API_URL is missing" };
 
-        return { success: true };
-    } catch (err) {
-        console.error("clockOutWithTasks Error:", err);
-        return { success: false, error: err instanceof Error ? err.message : String(err) };
+  try {
+    const ymd = todayYmdJst();
+
+    // 1) DB: clock-out
+    const dbRes = await fetch(`${apiUrl}/database/attendance/clock-out`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+
+    if (!dbRes.ok) {
+      const text = await dbRes.text().catch(() => "");
+      throw new Error(`Database clock-out failed: ${dbRes.status} ${text}`);
     }
+
+    // 2) DB: daily-reports upsert（実績タスク + メモ）
+    const actual = mapTasks(actualTasks);
+
+    const upsertRes = await fetch(`${apiUrl}/database/daily-reports/upsert-from-dashboard`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        date: ymd,
+        mode: "checkout",
+        sessionNo,            // ✅ 複数セッション対応
+        actualTasks: actual,
+        summary: summary ?? "",
+        troubles: issues ?? "",
+        announcements: notes ?? "",
+      }),
+    });
+
+    if (!upsertRes.ok) {
+      const text = await upsertRes.text().catch(() => "");
+      throw new Error(`DailyReports upsert(checkout) failed: ${upsertRes.status} ${text}`);
+    }
+
+    // 3) Slack通知
+    const slackRes = await fetch(`${apiUrl}/slack/clock-out-report`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        userName: session?.user?.name,
+        actualTasks,
+        summary,
+        issues,
+        notes,
+      }),
+    });
+
+    if (!slackRes.ok) {
+      const text = await slackRes.text().catch(() => "");
+      // Slack必須なら throw
+      throw new Error(`Slack notification failed: ${slackRes.status} ${text}`);
+      // 必須じゃないなら warn
+      // console.warn(`Slack notification failed: ${slackRes.status} ${text}`);
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("clockOutWithTasks Error:", err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }

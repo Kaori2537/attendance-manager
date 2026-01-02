@@ -2,13 +2,22 @@
 
 import { useEffect, useState } from "react";
 
-export function useDailyReportByDate(date: string) {
+export function useDailyReportByDate(date: string | null) {
   const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!date) return;
+    // ✅ 未選択なら状態をリセットして終了
+    if (!date) {
+      setData(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    // ✅ ここで string に確定させる（TS対策）
+    const ymd = date;
 
     let cancelled = false;
 
@@ -18,7 +27,7 @@ export function useDailyReportByDate(date: string) {
 
       try {
         const res = await fetch(
-          `/api/daily-reports/get-by-date?date=${date}`,
+          `/api/daily-reports/get-by-date?date=${encodeURIComponent(ymd)}`,
           { cache: "no-store" }
         );
 
@@ -34,7 +43,7 @@ export function useDailyReportByDate(date: string) {
 
         if (!cancelled) setData(json);
       } catch (e: any) {
-        if (!cancelled) setError(e.message ?? "Unknown error");
+        if (!cancelled) setError(e?.message ?? "Unknown error");
       } finally {
         if (!cancelled) setLoading(false);
       }

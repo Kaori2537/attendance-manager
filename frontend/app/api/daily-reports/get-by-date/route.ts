@@ -1,22 +1,26 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     const token = session?.user?.apiToken;
 
     if (!token) {
-      // ✅ 今だけデバッグ。直ったら消してOK
-      return new Response(
-        JSON.stringify({
+      return json(
+        {
           error: "Unauthorized",
-          debug: {
-            hasSession: !!session,
-            user: session?.user ?? null,
-          },
-        }),
-        { status: 401 }
+          ...(process.env.NODE_ENV !== "production"
+            ? { debug: { hasSession: !!session, user: session?.user ?? null } }
+            : {}),
+        },
+        401
       );
     }
 
@@ -25,14 +29,12 @@ export async function GET(request: Request) {
     const userId = url.searchParams.get("userId"); // optional（管理者用）
 
     if (!date) {
-      return new Response(JSON.stringify({ error: "Missing parameters", detail: "date is required" }), {
-        status: 400,
-      });
+      return json({ error: "Missing parameters", detail: "date is required" }, 400);
     }
 
     const base = process.env.NEXT_PUBLIC_API_URL;
     if (!base) {
-      return new Response(JSON.stringify({ error: "NEXT_PUBLIC_API_URL missing" }), { status: 500 });
+      return json({ error: "NEXT_PUBLIC_API_URL missing" }, 500);
     }
 
     const backendUrl = new URL(`${base}/database/daily-reports/get-by-date`);
@@ -52,8 +54,8 @@ export async function GET(request: Request) {
       data = { error: "Invalid response from backend", raw };
     }
 
-    return new Response(JSON.stringify(data), { status: res.status });
+    return json(data, res.status);
   } catch (err) {
-    return new Response(JSON.stringify({ error: "Internal error", detail: String(err) }), { status: 500 });
+    return json({ error: "Internal error", detail: String(err) }, 500);
   }
 }

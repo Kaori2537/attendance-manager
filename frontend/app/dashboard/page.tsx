@@ -1,81 +1,82 @@
-//dashboard/page.tsx
-
+// frontend/app/dashboard/page.tsx
 "use client";
 
-import { useAttendance } from "./hooks/useAttendance";
+import { WeeklyAlert } from "./components/WeeklyAlert";
 import { ClockCard } from "./components/ClockCard";
 import { PunchButtons } from "./components/PunchButtons";
-import { SummaryCard } from "./components/SummaryCard";
 import { SessionList } from "./components/SessionList";
-import { WeeklyAlert } from "./components/WeeklyAlert";
+import { SummaryCard } from "./components/SummaryCard";
+import { BreakDialog } from "./components/BreakDialog";
 import { ClockInDialog } from "./components/ClockInDialog";
 import { ClockOutDialog } from "./components/ClockOutDialog";
-import { BreakDialog } from "./components/BreakDialog";
+
+import { useAttendance } from "./hooks/useAttendance";
 import { useClockDialogs } from "./hooks/useClockDialogs";
 
-export default function Dashboard() {
-    const {
-        attendance,
-        currentSession,
-        onBreak,
-        weekTotalMs,
-        handleClockIn,
-        handleClockOut,
-        handleBreakStart,
-        handleBreakEnd,
-    } = useAttendance();
+export default function Page() {
+  const {
+    attendance,
+    currentSession,
+    onBreak,
+    weekTotalMs,
+    handleClockIn,
+    handleClockOut,
+    handleBreakStart,
+    handleBreakEnd,
+  } = useAttendance();
 
-    const {
-        showClockInDialog,
-        showClockOutDialog,
-        showBreakDialog,
-        breakMode,
-        openClockIn,
-        openClockOut,
-        openBreakStart,
-        openBreakEnd,
-        closeDialogs,
-    } = useClockDialogs();
+  const {
+    showClockInDialog,
+    showClockOutDialog,
+    showBreakDialog,
+    breakMode,
+    openClockIn,
+    openClockOut,
+    openBreakStart,
+    openBreakEnd,
+    closeDialogs,
+  } = useClockDialogs();
 
-    return (
-        <div className="space-y-6">
-            <ClockCard />
+  const isWorking = currentSession !== null;
+  const sessionCount = attendance?.sessions?.length ?? 0;
 
-            {/* 出勤・退勤ボタン */}
-            <PunchButtons
-                onClockIn={openClockIn}
-                onClockOut={openClockOut}
-                onBreakStart={openBreakStart}
-                onBreakEnd={openBreakEnd}
-                onBreak={onBreak}
-                isWorking={!!currentSession}
-                sessionCount={attendance?.sessions?.length || 0}
-            />
+  return (
+    <div className="space-y-6">
+      <ClockCard />
 
-            <SummaryCard attendance={attendance} />
-            <SessionList attendance={attendance} currentSession={currentSession} onBreak={onBreak} />
-            <WeeklyAlert weeklyMs={weekTotalMs} />
+      <PunchButtons
+        onClockIn={openClockIn}
+        onClockOut={openClockOut}
+        onBreakStart={openBreakStart}
+        onBreakEnd={openBreakEnd}
+        onBreak={onBreak}
+        isWorking={isWorking}
+        sessionCount={sessionCount}
+      />
 
-            {/* ダイアログ */}
-            <ClockInDialog
-                open={showClockInDialog}
-                onClose={closeDialogs}
-                onSubmit={handleClockIn}
-            />
+      <SummaryCard attendance={attendance} />
 
-            <ClockOutDialog
-                open={showClockOutDialog}
-                onClose={closeDialogs}
-                onSubmit={handleClockOut}
-            />
+      <SessionList
+        attendance={attendance}
+        currentSession={currentSession}
+        onBreak={onBreak}
+      />
 
-            <BreakDialog
-                open={showBreakDialog}
-                mode={breakMode}
-                onClose={closeDialogs}
-                onStart={handleBreakStart}
-                onEnd={handleBreakEnd}
-            />
-        </div>
-    );
+      <WeeklyAlert weeklyMs={weekTotalMs} />
+
+      {/* dialogs */}
+      <ClockInDialog open={showClockInDialog} onClose={closeDialogs} onSubmit={handleClockIn} />
+
+      <ClockOutDialog open={showClockOutDialog} onClose={closeDialogs} onSubmit={handleClockOut} />
+
+      <BreakDialog
+        open={showBreakDialog}
+        mode={breakMode}
+        onClose={closeDialogs}
+        // ✅ props名を合わせる
+        onStart={handleBreakStart}
+        onEnd={handleBreakEnd}
+      />
+    </div>
+  );
 }

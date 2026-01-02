@@ -1,26 +1,27 @@
 // app/layout.tsx
-import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
-import "./globals.css"
-import { getCurrentUser } from "@/lib/auth"
-import { Header } from "@/components/Header"
-import { Footer } from "@/components/Footer"
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+import { getCurrentUser } from "@/lib/auth";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { Providers } from "./providers";
+import { Toaster } from "@/components/toaster";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] })
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] })
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "勤怠管理システム",
   description: "Next.js + NextAuth Sample",
-}
+};
 
 export default async function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const user = await getCurrentUser()
+  const user = await getCurrentUser();
 
   return (
     <html lang="ja">
@@ -28,9 +29,11 @@ export default async function RootLayout({
         <Providers>
           <Header currentUser={user} />
           <main className="container mx-auto p-6 max-w-7xl">{children}</main>
+          {/* ✅ toast を表示する土台 */}
+          <Toaster />
         </Providers>
         <Footer />
       </body>
     </html>
-  )
+  );
 }

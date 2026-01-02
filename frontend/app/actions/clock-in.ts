@@ -1,49 +1,100 @@
 "use server";
 
-//app/actions/clock-in.ts
-
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
-import { Task } from "../../../shared/types/Attendance";
+import type { Task } from "../../../shared/types/Attendance";
 
-export async function clockInWithTasks(plannedTasks: Task[]) {
-    const session = await getServerSession(authOptions);
-    const token = session?.user?.apiToken;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+type TaskInput = { title: string; minutes: number };
 
-    if (!token) throw new Error("Unauthorized");
+function todayYmdJst() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" }); // YYYY-MM-DD
+}
 
-    try {
-        // DB側 clock-in
-        const dbRes = await fetch(`${apiUrl}/database/attendance/clock-in`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-        });
+function toMinutes(hoursLike: unknown): number {
+  const n = typeof hoursLike === "string" ? parseFloat(hoursLike) : Number(hoursLike);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n * 60);
+}
 
-        if (!dbRes.ok) {
-            throw new Error(`Database clock-in failed: ${dbRes.status}`);
-        }
+function mapTasks(tasks: Task[]): TaskInput[] {
+  return (tasks ?? [])
+    .map((t: any) => ({
+      title: String(t?.task ?? t?.title ?? "").trim(),
+      minutes: toMinutes(t?.hours ?? t?.minutes),
+    }))
+    .filter((x) => x.title.length > 0 && x.minutes > 0);
+}
 
-        // Slack通知
-        const slackRes = await fetch(`${apiUrl}/slack/clock-in-report`, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                userName: session.user.name,
-                plannedTasks,
-            }),
-        });
+export async function clockInWithTasks(plannedTasks: Task[], sessionNo: number) {
+  const session = await getServerSession(authOptions);
+  const token = (session?.user as any)?.apiToken as string | undefined;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-        if (!slackRes.ok) {
-            throw new Error(`Slack notification failed: ${slackRes.status}`);
-        }
+  if (!token) return { success: false, error: "Unauthorized" };
+  if (!apiUrl) return { success: false, error: "NEXT_PUBLIC_API_URL is missing" };
 
-        return { success: true };
-    } catch (err) {
-        console.error("clockInWithTasks Error:", err);
-        return { success: false, error: err instanceof Error ? err.message : String(err) };
+  try {
+    const ymd = todayYmdJst();
+
+    // 1) DB: clock-in
+    const dbRes = await fetch(`${apiUrl}/database/attendance/clock-in`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+
+    if (!dbRes.ok) {
+      const text = await dbRes.text().catch(() => "");
+      throw new Error(`Database clock-in failed: ${dbRes.status} ${text}`);
     }
+
+    // 2) DB: daily-reports upsert（予定タスク）
+    const planned = mapTasks(plannedTasks);
+
+    const upsertRes = await fetch(`${apiUrl}/database/daily-reports/upsert-from-dashboard`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        date: ymd,
+        mode: "checkin",
+        sessionNo,           // ✅ 複数セッション対応
+        plannedTasks: planned,
+      }),
+    });
+
+    if (!upsertRes.ok) {
+      const text = await upsertRes.text().catch(() => "");
+      throw new Error(`DailyReports upsert(checkin) failed: ${upsertRes.status} ${text}`);
+    }
+
+    // 3) Slack通知（失敗しても日報反映は成功にしたいなら throw しない）
+    const slackRes = await fetch(`${apiUrl}/slack/clock-in-report`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        userName: session?.user?.name,
+        plannedTasks,
+      }),
+    });
+
+    if (!slackRes.ok) {
+      const text = await slackRes.text().catch(() => "");
+      // 要件により：Slack必須なら throw、必須じゃないなら warn にする
+      throw new Error(`Slack notification failed: ${slackRes.status} ${text}`);
+      // console.warn(`Slack notification failed: ${slackRes.status} ${text}`);
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("clockInWithTasks Error:", err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }

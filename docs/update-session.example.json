@@ -1,0 +1,6 @@
+{
+  "sessionId": "uuid",
+  "summary": "string | null",
+  "troubles": "string | null",
+  "announcements": "string | null"
+}
