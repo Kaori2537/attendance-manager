@@ -42,7 +42,7 @@ export async function clockOutWithTasks(
   try {
     const ymd = todayYmdJst();
 
-    // 1) DB: clock-out
+    // 1) DB: clock-out（勤怠）
     const dbRes = await fetch(`${apiUrl}/database/attendance/clock-out`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -67,7 +67,8 @@ export async function clockOutWithTasks(
       body: JSON.stringify({
         date: ymd,
         mode: "checkout",
-        sessionNo,            // ✅ 複数セッション対応
+        sessionNo,
+        userName: session?.user?.name, // ★ Slack用（backendで使用）
         actualTasks: actual,
         summary: summary ?? "",
         troubles: issues ?? "",
@@ -80,31 +81,7 @@ export async function clockOutWithTasks(
       throw new Error(`DailyReports upsert(checkout) failed: ${upsertRes.status} ${text}`);
     }
 
-    // 3) Slack通知
-    const slackRes = await fetch(`${apiUrl}/slack/clock-out-report`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-      body: JSON.stringify({
-        userName: session?.user?.name,
-        actualTasks,
-        summary,
-        issues,
-        notes,
-      }),
-    });
-
-    if (!slackRes.ok) {
-      const text = await slackRes.text().catch(() => "");
-      // Slack必須なら throw
-      throw new Error(`Slack notification failed: ${slackRes.status} ${text}`);
-      // 必須じゃないなら warn
-      // console.warn(`Slack notification failed: ${slackRes.status} ${text}`);
-    }
-
+    // ★ Slack通知は backend が担当
     return { success: true };
   } catch (err) {
     console.error("clockOutWithTasks Error:", err);

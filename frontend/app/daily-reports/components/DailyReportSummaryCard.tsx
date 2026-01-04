@@ -308,7 +308,7 @@ export function DailyReportSummaryCard({
                   {plannedTasks.map((t) => (
                     <li key={t.id} className="flex justify-between gap-3">
                       <span className="text-sm">• {t.title}</span>
-                      <span className="text-sm tabular-nums text-muted-foreground">
+                      <span className="text-sm">
                         {minutesToHoursText(t.minutes)}
                       </span>
                     </li>
@@ -340,7 +340,7 @@ export function DailyReportSummaryCard({
                   {actualTasks.map((t) => (
                     <li key={t.id} className="flex justify-between gap-3">
                       <span className="text-sm">• {t.title}</span>
-                      <span className="text-sm tabular-nums text-muted-foreground">
+                      <span className="text-sm">
                         {minutesToHoursText(t.minutes)}
                       </span>
                     </li>

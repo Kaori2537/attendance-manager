@@ -5,12 +5,15 @@ import slackRoute from './routes/slack';
 import dailyReportsRoute from './routes/dailyReports/index';
 import reportsRoute from './routes/reports';
 import type { Env } from './types/env';
+import integrations from "./routes/integrations";
+
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.route('/auth', authRoute);
 app.route('/database', databaseRoute);
 app.route('/slack', slackRoute);
+app.route("/integrations", integrations);
 
 // 追加
 app.route('/daily-reports', dailyReportsRoute);

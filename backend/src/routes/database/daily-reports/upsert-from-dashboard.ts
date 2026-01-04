@@ -1,13 +1,14 @@
+// backend/src/routes/database/daily-reports/upsert-from-dashboard.ts
 import { Hono } from "hono";
 import { verify } from "hono/jwt";
-import { createClient } from "@supabase/supabase-js";
 import type { Env } from "../../../types/env";
+import { getSupabaseAdminClient } from "../../../../lib/supabase";
 
 type DashboardTask = {
   task?: string;
   title?: string;
-  hours?: number | string;   // string も吸収
-  minutes?: number | string; // string も吸収
+  hours?: number | string;
+  minutes?: number | string;
 };
 
 type Body = {
@@ -18,7 +19,13 @@ type Body = {
   summary?: string | null;
   troubles?: string | null;
   announcements?: string | null;
-  sessionNo?: number; // 任意（未指定なら1）
+  sessionNo?: number;
+
+  // Slack display
+  userName?: string | null;
+
+  // default true
+  postToSlack?: boolean;
 };
 
 const route = new Hono<{ Bindings: Env }>();
@@ -31,13 +38,6 @@ function clampSessionNo(n: unknown) {
   const v = Number(n ?? 1);
   if (!Number.isFinite(v)) return 1;
   return Math.min(3, Math.max(1, Math.trunc(v)));
-}
-
-function getSupabase(c: any) {
-  const url = c.env?.SUPABASE_URL;
-  const key = c.env?.SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Missing SUPABASE_URL or SERVICE_ROLE_KEY");
-  return createClient(url, key, { auth: { persistSession: false } });
 }
 
 function toNumber(x: unknown): number {
@@ -57,6 +57,11 @@ function toMinutes(t: DashboardTask): number {
 
 function toTitle(t: DashboardTask): string {
   return (t.title ?? t.task ?? "").trim() || "(no title)";
+}
+
+function nowTimeJp() {
+  const now = new Date();
+  return now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 }
 
 // session_id + kind を“入れ替え”する（delete→insert）
@@ -93,10 +98,12 @@ async function replaceTasks(
 }
 
 async function upsertDailyReport(sb: any, userId: string, date: string) {
-  // upsert 自体は OKだが、過去に重複があると .single() が死ぬので安全に取る
   const up = await sb
     .from("daily_reports")
-    .upsert({ user_id: userId, report_date: date, content: "" }, { onConflict: "user_id,report_date" });
+    .upsert(
+      { user_id: userId, report_date: date, content: "" },
+      { onConflict: "user_id,report_date" }
+    );
 
   if (up.error) throw new Error(`daily_reports upsert: ${up.error.message}`);
 
@@ -145,6 +152,69 @@ async function upsertDailyReportSession(
   return list[list.length - 1];
 }
 
+type SlackPostMessageResponse = { ok: boolean; ts?: string; error?: string };
+
+function tasksToText(tasks: DashboardTask[]) {
+  if (!tasks?.length) return "（なし）";
+  const lines = tasks
+    .map((t) => {
+      const title = toTitle(t);
+      const m = toMinutes(t);
+      const h = m > 0 ? `${(m / 60).toFixed(1)}h` : "";
+      return `• ${title}${h ? `（${h}）` : ""}`;
+    })
+    .join("\n");
+  return lines || "（なし）";
+}
+
+/**
+ * Slackに投稿して ts を返す
+ */
+async function postSlackMessage(c: any, params: { text: string; userName?: string | null }) {
+  const token = c.env.SLACK_BOT_TOKEN;
+  const channel = c.env.SLACK_CHANNEL_ID;
+
+  if (!token) throw new Error("Missing env: SLACK_BOT_TOKEN");
+  if (!channel) throw new Error("Missing env: SLACK_CHANNEL_ID");
+
+  const res = await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      channel,
+      text: params.text,
+      username: params.userName ?? undefined,
+      icon_emoji: ":memo:",
+    }),
+  });
+
+  const slackRes = (await res.json()) as SlackPostMessageResponse;
+  if (!slackRes.ok || !slackRes.ts) {
+    throw new Error(`Slack chat.postMessage failed: ${slackRes.error ?? "unknown"}`);
+  }
+  return { channelId: channel, messageTs: slackRes.ts };
+}
+
+async function saveSlackLink(
+  sb: any,
+  args: { sessionId: string; channelId: string; messageTs: string }
+) {
+  const { error } = await sb.from("daily_report_slack_links").insert({
+    daily_report_session_id: args.sessionId,
+    channel_id: args.channelId,
+    message_ts: args.messageTs,
+  });
+
+  if (error) {
+    if ((error as any).code === "23505") return; // 重複は無視
+    throw new Error(`daily_report_slack_links insert: ${error.message}`);
+  }
+}
+
+
 route.post("/", async (c) => {
   try {
     // --- auth ---
@@ -166,7 +236,6 @@ route.post("/", async (c) => {
     }
 
     const userId = payload.id;
-
     const body = (await c.req.json()) as Body;
 
     if (!body?.date || !isValidDate(body.date)) {
@@ -178,12 +247,13 @@ route.post("/", async (c) => {
 
     const sessionNo = clampSessionNo(body.sessionNo);
 
-    const sb = getSupabase(c);
+    // ✅ Backend authoritative: always use admin client (service role)
+    const sb = getSupabaseAdminClient(c.env);
 
-    // 1) daily_reports upsert（耐性あり）
+    // 1) daily_reports upsert
     const report = await upsertDailyReport(sb, userId, body.date);
 
-    // 2) daily_report_sessions upsert（耐性あり）
+    // 2) daily_report_sessions upsert
     const patch =
       body.mode === "checkout"
         ? {
@@ -195,11 +265,38 @@ route.post("/", async (c) => {
 
     const session = await upsertDailyReportSession(sb, report.id, sessionNo, patch);
 
-    // 3) tasks 反映
+    // 3) tasks reflect
     if (body.mode === "checkin") {
       await replaceTasks(sb, session.id, "planned", body.plannedTasks ?? []);
     } else {
       await replaceTasks(sb, session.id, "actual", body.actualTasks ?? []);
+    }
+
+    // 4) Slack post (optional) -> slack_links save
+    const shouldPost = body.postToSlack !== false; // default true
+    if (shouldPost) {
+      const time = nowTimeJp();
+      const userName = body.userName ?? "（ユーザー）";
+
+      const text =
+        body.mode === "checkin"
+          ? `${time}\n*${userName} さん（セッション${sessionNo}）が勤務開始しました！*\n\n*本日の予定*\n${tasksToText(
+              body.plannedTasks ?? []
+            )}`
+          : `${time}\n*${userName} さん（セッション${sessionNo}）が勤務終了しました！*\n\n*今日やったこと*\n${tasksToText(
+              body.actualTasks ?? []
+            )}${
+              body.summary?.trim() ? `\n\n*まとめ*\n${body.summary.trim()}` : ""
+            }${
+              body.troubles?.trim() ? `\n\n*困っていること*\n${body.troubles.trim()}` : ""
+            }${
+              body.announcements?.trim()
+                ? `\n\n*連絡事項*\n${body.announcements.trim()}`
+                : ""
+            }`;
+
+      const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+      await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs });
     }
 
     return c.json({ ok: true, reportId: report.id, sessionId: session.id, sessionNo });

@@ -2,10 +2,18 @@
   "name": "attendance-manager-backend",
   "main": "src/index.ts",
   "compatibility_date": "2025-12-29",
-
   "vars": {
+
     "SUPABASE_URL": "http://127.0.0.1:54321",
-    "SERVICE_ROLE_KEY": "dev-placeholder",
-    "JWT_SECRET": "dev-placeholder"
+    "SUPABASE_SERVICE_ROLE_KEY": "sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz",
+    "SERVICE_ROLE_KEY": "sb_secret_xxxxxxxxxxxxxxxxx",
+
+
+    "JWT_SECRET": "dev-placeholder",
+
+
+    "SLACK_SIGNING_SECRET": "xxxxxxxxxxxxxxxxxxxxxxxx",
+    "SLACK_BOT_TOKEN": "xoxb-xxxxxxxxxxxxxxxxxxxxxxxx",
+    "SLACK_CHANNEL_ID": "C0A670S467L"
   }
 }

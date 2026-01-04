@@ -7,4 +7,6 @@ export type Env = {
   // Slack
   SLACK_BOT_TOKEN: string;
   SLACK_CHANNEL_ID: string;
+
+   SLACK_SIGNING_SECRET: string; 
 };

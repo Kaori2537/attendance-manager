@@ -36,7 +36,7 @@ export async function clockInWithTasks(plannedTasks: Task[], sessionNo: number) 
   try {
     const ymd = todayYmdJst();
 
-    // 1) DB: clock-in
+    // 1) DB: clock-in（勤怠）
     const dbRes = await fetch(`${apiUrl}/database/attendance/clock-in`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -61,7 +61,8 @@ export async function clockInWithTasks(plannedTasks: Task[], sessionNo: number) 
       body: JSON.stringify({
         date: ymd,
         mode: "checkin",
-        sessionNo,           // ✅ 複数セッション対応
+        sessionNo,
+        userName: session?.user?.name, // ★ Slack用（backendで使用）
         plannedTasks: planned,
       }),
     });
@@ -71,27 +72,7 @@ export async function clockInWithTasks(plannedTasks: Task[], sessionNo: number) 
       throw new Error(`DailyReports upsert(checkin) failed: ${upsertRes.status} ${text}`);
     }
 
-    // 3) Slack通知（失敗しても日報反映は成功にしたいなら throw しない）
-    const slackRes = await fetch(`${apiUrl}/slack/clock-in-report`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-      body: JSON.stringify({
-        userName: session?.user?.name,
-        plannedTasks,
-      }),
-    });
-
-    if (!slackRes.ok) {
-      const text = await slackRes.text().catch(() => "");
-      // 要件により：Slack必須なら throw、必須じゃないなら warn にする
-      throw new Error(`Slack notification failed: ${slackRes.status} ${text}`);
-      // console.warn(`Slack notification failed: ${slackRes.status} ${text}`);
-    }
-
+    // ★ Slack通知は backend が担当するため、ここでは何もしない
     return { success: true };
   } catch (err) {
     console.error("clockInWithTasks Error:", err);
