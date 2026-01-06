@@ -21,6 +21,12 @@ import dailyReportsGetByDateRouter from "./daily-reports/get-by-date";
 import dailyReportsUpdateSessionRouter from "./daily-reports/update-session";
 import dailyReportsUpsertFromDashboardRouter from "./daily-reports/upsert-from-dashboard";
 import upsertFromDashboard from "./daily-reports/upsert-from-dashboard";
+import dailyReportsAddSlackReactionRouter from "./daily-reports/add-slack-reaction";
+import adminUsersRouter from "./admin/users";
+import dailyReportsCommentsRouter from "./daily-reports/comments";
+import dailyReportsAddSlackCommentRouter from "./daily-reports/add-slack-comment";
+
+
 
 const database = new Hono<{ Bindings: Env }>();
 
@@ -45,5 +51,14 @@ database.route("/daily-reports/get-by-date", dailyReportsGetByDateRouter);
 database.route("/daily-reports/update-session", dailyReportsUpdateSessionRouter);
 database.route("/daily-reports/upsert-from-dashboard", dailyReportsUpsertFromDashboardRouter);
 database.route("/daily-reports/upsert-from-dashboard", upsertFromDashboard);
+database.route("/daily-reports/add-slack-reaction", dailyReportsAddSlackReactionRouter);
+
+// admin
+database.route("/admin/users", adminUsersRouter);
+
+// daily-reports (comments)
+database.route("/daily-reports/comments", dailyReportsCommentsRouter);
+database.route("/daily-reports/add-slack-comment", dailyReportsAddSlackCommentRouter);
+
 
 export default database;

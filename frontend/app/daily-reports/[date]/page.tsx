@@ -17,6 +17,8 @@ type UiSession = {
   announcements: string | null;
   plannedTasks: UiTask[];
   actualTasks: UiTask[];
+  // ✅ 追加：Slack由来リアクション集計（例: { "+1": 3, "tada": 1 }）
+  reactions: Record<string, number>;
 };
 
 function isYmd(s: string) {
@@ -25,6 +27,31 @@ function isYmd(s: string) {
 
 function minutesToHoursText(minutes: number) {
   return `${(minutes / 60).toFixed(1)}h`;
+}
+
+// ✅ 表示順を固定（Slackっぽさ）
+const REACTION_ORDER = [
+  { label: "👍", key: "+1" },
+  { label: "🎉", key: "tada" },
+  { label: "👏", key: "clap" },
+  { label: "✅", key: "white_check_mark" },
+  { label: "🙏", key: "pray" },
+  { label: "👀", key: "eyes" },
+] as const;
+
+function ReactionSummary({ reactions }: { reactions: Record<string, number> }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {REACTION_ORDER.map((r) => (
+        <span
+          key={r.key}
+          className="rounded-full border px-2 py-0.5 text-sm text-muted-foreground"
+        >
+          {r.label} {reactions?.[r.key] ?? 0}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -55,6 +82,7 @@ function normalizeSessions(sessions: unknown[]): UiSession[] {
       actualTasks: (s.actualTasks ?? []).map(
         (t: any): UiTask => ({ id: t.id, title: taskTitle(t), minutes: taskMinutes(t) })
       ),
+      reactions: s.reactions ?? {}, // ✅ 追加
     }));
 }
 
@@ -63,13 +91,11 @@ export default async function Page({
 }: {
   params: Promise<{ date: string }> | { date: string };
 }) {
-  // ✅ Next.js 16 (turbopack) 対策：params が Promise の可能性があるので await
   const resolvedParams = await Promise.resolve(params);
   const date = resolvedParams.date;
 
   if (!isYmd(date)) notFound();
 
-  // ✅ サーバーで session を取得して backend JWT を取り出す
   const session = await getServerSession(authOptions);
   const apiToken = (session?.user as any)?.apiToken as string | undefined;
 
@@ -85,7 +111,6 @@ export default async function Page({
   const backendUrl = new URL(`${backendBase}/database/daily-reports/get-by-date`);
   backendUrl.searchParams.set("date", date);
 
-  // ✅ backend を Bearer 付きで直叩き（BFFを経由しない＝cookie問題を回避）
   const res = await fetch(backendUrl.toString(), {
     headers: { Authorization: `Bearer ${apiToken}` },
     cache: "no-store",
@@ -100,7 +125,6 @@ export default async function Page({
   }
 
   if (!res.ok || !data?.ok) {
-    // backend 側でトークン不正等なら login へ
     if (res.status === 401) {
       redirect(`/login?callbackUrl=${encodeURIComponent(`/daily-reports/${date}`)}`);
     }
@@ -126,6 +150,7 @@ export default async function Page({
         announcements: null,
         plannedTasks: [],
         actualTasks: [],
+        reactions: {}, // ✅ 追加
       }
     );
   });
@@ -154,12 +179,17 @@ export default async function Page({
 
               {/* メモ編集 + 保存 */}
               {s.id ? (
-                <SessionMemoEditor
-                  sessionId={s.id}
-                  summary={s.summary}
-                  troubles={s.troubles}
-                  announcements={s.announcements}
-                />
+                <>
+                  <SessionMemoEditor
+                    sessionId={s.id}
+                    summary={s.summary}
+                    troubles={s.troubles}
+                    announcements={s.announcements}
+                  />
+
+                  {/* ✅ Slack由来リアクション（表示のみ） */}
+                  <ReactionSummary reactions={s.reactions} />
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">Session ID が取得できませんでした</p>
               )}
@@ -205,11 +235,7 @@ export default async function Page({
       </div>
 
       {/* 右：Summary */}
-     <DailyReportSummaryCard
-  selectedDate={selectedDate}
-  selectedYmd={date}
-  sessions={sessions123}
-/>
+      <DailyReportSummaryCard selectedDate={selectedDate} selectedYmd={date} sessions={sessions123} />
     </div>
   );
 }

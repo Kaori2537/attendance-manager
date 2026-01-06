@@ -30,7 +30,14 @@ export function Header({ currentUser }: { currentUser: Session["user"] | null })
   const navigation = [
     { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
     { href: "/attendance-history", label: "勤怠履歴", icon: History },
-    { href: "/daily-reports", label: "日報履歴", icon: NotebookPen },
+
+    // ✅ ここが変更点：管理者は admin 日報へ
+    {
+      href: isAdmin ? "/admin/daily-reports" : "/daily-reports",
+      label: "日報履歴",
+      icon: NotebookPen,
+    },
+
     ...(isAdmin ? [{ href: "/admin", label: "管理者", icon: Users }] : []),
   ];
 

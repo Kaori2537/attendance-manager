@@ -198,22 +198,31 @@ async function postSlackMessage(c: any, params: { text: string; userName?: strin
   return { channelId: channel, messageTs: slackRes.ts };
 }
 
+type SlackLinkKind = "clock_in" | "clock_out";
+
+/**
+ * ✅ kind を保存して「出勤/退勤で別メッセージTS」を持つ
+ * - UNIQUE(daily_report_session_id, kind) があれば upsert が安定
+ * - UNIQUEが無い場合は insert + 23505無視に変えてもOK
+ */
 async function saveSlackLink(
   sb: any,
-  args: { sessionId: string; channelId: string; messageTs: string }
+  args: { sessionId: string; channelId: string; messageTs: string; kind: SlackLinkKind }
 ) {
-  const { error } = await sb.from("daily_report_slack_links").insert({
-    daily_report_session_id: args.sessionId,
-    channel_id: args.channelId,
-    message_ts: args.messageTs,
-  });
+  const up = await sb.from("daily_report_slack_links").upsert(
+    {
+      daily_report_session_id: args.sessionId,
+      channel_id: args.channelId,
+      message_ts: args.messageTs,
+      kind: args.kind,
+    },
+    { onConflict: "daily_report_session_id,kind" }
+  );
 
-  if (error) {
-    if ((error as any).code === "23505") return; // 重複は無視
-    throw new Error(`daily_report_slack_links insert: ${error.message}`);
+  if (up.error) {
+    throw new Error(`daily_report_slack_links upsert: ${up.error.message}`);
   }
 }
-
 
 route.post("/", async (c) => {
   try {
@@ -272,7 +281,7 @@ route.post("/", async (c) => {
       await replaceTasks(sb, session.id, "actual", body.actualTasks ?? []);
     }
 
-    // 4) Slack post (optional) -> slack_links save
+    // 4) Slack post (optional) -> slack_links save (kind分岐)
     const shouldPost = body.postToSlack !== false; // default true
     if (shouldPost) {
       const time = nowTimeJp();
@@ -296,7 +305,9 @@ route.post("/", async (c) => {
             }`;
 
       const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
-      await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs });
+
+      const kind: SlackLinkKind = body.mode === "checkin" ? "clock_in" : "clock_out";
+      await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind });
     }
 
     return c.json({ ok: true, reportId: report.id, sessionId: session.id, sessionNo });

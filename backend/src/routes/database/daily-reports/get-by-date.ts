@@ -200,7 +200,10 @@ route.get("/", async (c) => {
     const tasks = tasksRes.data ?? [];
     const tasksBySession = new Map<string, { planned: any[]; actual: any[] }>();
     for (const t of tasks) {
-      const bucket = tasksBySession.get(t.session_id) ?? { planned: [], actual: [] };
+      const bucket = tasksBySession.get(t.session_id) ?? {
+        planned: [],
+        actual: [],
+      };
       if (t.kind === "planned") bucket.planned.push(t);
       else bucket.actual.push(t);
       tasksBySession.set(t.session_id, bucket);
@@ -210,6 +213,40 @@ route.get("/", async (c) => {
       ...s,
       plannedTasks: tasksBySession.get(s.id)?.planned ?? [],
       actualTasks: tasksBySession.get(s.id)?.actual ?? [],
+    }));
+
+    // ✅ 3.5) reactions（Slack由来のリアクションを session ごとに集計して付与）
+    const reactionSessionIds = sessionsWithTasks.map((s: any) => s.id);
+
+    let reactionRows: any[] = [];
+    if (reactionSessionIds.length > 0) {
+      const rc = await sb
+        .from("daily_report_reactions")
+        .select("daily_report_session_id, emoji")
+        .in("daily_report_session_id", reactionSessionIds);
+
+      if (rc.error) {
+        console.error("daily_report_reactions select error:", rc.error);
+        return c.json(
+          { ok: false, error: rc.error.message, detail: rc.error },
+          500
+        );
+      }
+
+      reactionRows = rc.data ?? [];
+    }
+
+    const reactionsBySession: Record<string, Record<string, number>> = {};
+    for (const r of reactionRows) {
+      const sid = r.daily_report_session_id;
+      if (!reactionsBySession[sid]) reactionsBySession[sid] = {};
+      reactionsBySession[sid][r.emoji] =
+        (reactionsBySession[sid][r.emoji] ?? 0) + 1;
+    }
+
+    const sessionsWithTasksAndReactions = sessionsWithTasks.map((s: any) => ({
+      ...s,
+      reactions: reactionsBySession[s.id] ?? {},
     }));
 
     // 4) attendance（勤怠）を取得して組み立て（複数work_sessions対応）
@@ -270,37 +307,48 @@ route.get("/", async (c) => {
       const calcBreakMinutes = (breaks: any[]) =>
         (breaks ?? []).reduce((acc: number, b: any) => {
           if (!b.break_start || !b.break_end) return acc;
-          const ms = new Date(b.break_end).getTime() - new Date(b.break_start).getTime();
+          const ms =
+            new Date(b.break_end).getTime() - new Date(b.break_start).getTime();
           return acc + Math.max(0, Math.round(ms / 60000));
         }, 0);
 
-      const attendanceSessions: AttendanceSessionPayload[] = (wsList ?? []).map((ws: any) => {
-        const bs = breaksBySession.get(ws.id) ?? [];
-        const breakMinutes = calcBreakMinutes(bs);
+      const attendanceSessions: AttendanceSessionPayload[] = (wsList ?? []).map(
+        (ws: any) => {
+          const bs = breaksBySession.get(ws.id) ?? [];
+          const breakMinutes = calcBreakMinutes(bs);
 
-        let workMinutes: number | null = null;
-        if (ws.clock_in && ws.clock_out) {
-          const ms = new Date(ws.clock_out).getTime() - new Date(ws.clock_in).getTime();
-          const total = Math.max(0, Math.round(ms / 60000));
-          workMinutes = Math.max(0, total - breakMinutes);
+          let workMinutes: number | null = null;
+          if (ws.clock_in && ws.clock_out) {
+            const ms =
+              new Date(ws.clock_out).getTime() -
+              new Date(ws.clock_in).getTime();
+            const total = Math.max(0, Math.round(ms / 60000));
+            workMinutes = Math.max(0, total - breakMinutes);
+          }
+
+          return {
+            workSessionId: ws.id,
+            clockIn: ws.clock_in ?? null,
+            clockOut: ws.clock_out ?? null,
+            breaks: (bs ?? []).map((b: any) => ({
+              id: b.id,
+              start: b.break_start ?? null,
+              end: b.break_end ?? null,
+            })),
+            breakMinutes,
+            workMinutes,
+          };
         }
+      );
 
-        return {
-          workSessionId: ws.id,
-          clockIn: ws.clock_in ?? null,
-          clockOut: ws.clock_out ?? null,
-          breaks: (bs ?? []).map((b: any) => ({
-            id: b.id,
-            start: b.break_start ?? null,
-            end: b.break_end ?? null,
-          })),
-          breakMinutes,
-          workMinutes,
-        };
-      });
-
-      const breakMinutesTotal = attendanceSessions.reduce((a, s) => a + (s.breakMinutes ?? 0), 0);
-      const workMinutesTotal = attendanceSessions.reduce((a, s) => a + (s.workMinutes ?? 0), 0);
+      const breakMinutesTotal = attendanceSessions.reduce(
+        (a, s) => a + (s.breakMinutes ?? 0),
+        0
+      );
+      const workMinutesTotal = attendanceSessions.reduce(
+        (a, s) => a + (s.workMinutes ?? 0),
+        0
+      );
 
       attendancePayload = {
         attendanceId: attendance.id,
@@ -315,7 +363,7 @@ route.get("/", async (c) => {
       userId,
       date,
       dailyReport: report,
-      sessions: sessionsWithTasks,
+      sessions: sessionsWithTasksAndReactions, // ✅ ここが変更点
       attendance: attendancePayload,
     });
   } catch (e: any) {

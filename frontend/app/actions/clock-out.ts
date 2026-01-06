@@ -30,7 +30,8 @@ export async function clockOutWithTasks(
   summary: string,
   issues: string,
   notes: string,
-  sessionNo: number
+  sessionNo: number,
+  sessionId: string
 ) {
   const session = await getServerSession(authOptions);
   const token = (session?.user as any)?.apiToken as string | undefined;
@@ -68,6 +69,7 @@ export async function clockOutWithTasks(
         date: ymd,
         mode: "checkout",
         sessionNo,
+        sessionId, 
         userName: session?.user?.name, // ★ Slack用（backendで使用）
         actualTasks: actual,
         summary: summary ?? "",
