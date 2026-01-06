@@ -23,6 +23,7 @@ import dailyReportsUpsertFromDashboardRouter from "./daily-reports/upsert-from-d
 import upsertFromDashboard from "./daily-reports/upsert-from-dashboard";
 import dailyReportsAddSlackReactionRouter from "./daily-reports/add-slack-reaction";
 import adminUsersRouter from "./admin/users";
+import adminDailyReportsRouter from "./admin/daily-reports";
 import dailyReportsCommentsRouter from "./daily-reports/comments";
 import dailyReportsAddSlackCommentRouter from "./daily-reports/add-slack-comment";
 
@@ -55,6 +56,7 @@ database.route("/daily-reports/add-slack-reaction", dailyReportsAddSlackReaction
 
 // admin
 database.route("/admin/users", adminUsersRouter);
+database.route("/admin/daily-reports", adminDailyReportsRouter);
 
 // daily-reports (comments)
 database.route("/daily-reports/comments", dailyReportsCommentsRouter);
