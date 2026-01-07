@@ -31,7 +31,7 @@ export async function clockOutWithTasks(
   issues: string,
   notes: string,
   sessionNo: number,
-  sessionId: string
+  sessionId?: string
 ) {
   const session = await getServerSession(authOptions);
   const token = (session?.user as any)?.apiToken as string | undefined;

@@ -1,7 +1,7 @@
 // ClockOutDialog.tsx
 "use client"
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,14 +12,62 @@ import { Loader } from "@/components/Loader";
 import { SuccessDialog } from "@/components/SuccessDialog";
 import { Task } from "../../../../shared/types/Attendance";
 
+type PlannedTask = {
+    title: string;
+    minutes: number;
+};
 
-export const ClockOutDialog = ({ open, onClose, onSubmit }: { open: boolean; onClose: () => void; onSubmit: (actualTasks: Task[], summary: string, issues: string, notes: string) => Promise<void>; }) => {
+export const ClockOutDialog = ({ open, onClose, onSubmit, sessionNo }: { open: boolean; onClose: () => void; onSubmit: (actualTasks: Task[], summary: string, issues: string, notes: string) => Promise<void>; sessionNo: number; }) => {
 
     const [actualTasks, setActualTasks] = useState<{ task: string, hours: string }[]>([{ task: "", hours: "" }]);
     const [summary, setSummary] = useState<string>("");
     const [issues, setIssues] = useState<string>("");
     const [notes, setNotes] = useState<string>("");
     const [mode, setMode] = useState<"form" | "loading" | "success">("form");
+    const [initialLoading, setInitialLoading] = useState(false);
+
+    // 出勤時に入力したタスクを取得して初期値に設定
+    useEffect(() => {
+        if (!open) return;
+
+        const fetchPlannedTasks = async () => {
+            setInitialLoading(true);
+            try {
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, "0");
+                const dd = String(today.getDate()).padStart(2, "0");
+                const dateStr = `${yyyy}-${mm}-${dd}`;
+
+                const res = await fetch(`/api/daily-reports/get-by-date?date=${dateStr}`);
+                if (!res.ok) {
+                    console.error("Failed to fetch planned tasks");
+                    return;
+                }
+
+                const data = await res.json();
+                if (!data.ok || !data.sessions) return;
+
+                // sessionNoに対応するセッションを探す（session_noは1-indexed）
+                const targetSession = data.sessions.find((s: any) => s.session_no === sessionNo);
+                if (!targetSession?.plannedTasks?.length) return;
+
+                // plannedTasksをactualTasksの形式に変換
+                const converted = targetSession.plannedTasks.map((t: PlannedTask) => ({
+                    task: t.title,
+                    hours: `${t.minutes / 60}時間`, // 分を時間に変換して「時間」を付与
+                }));
+
+                setActualTasks(converted);
+            } catch (e) {
+                console.error("Error fetching planned tasks:", e);
+            } finally {
+                setInitialLoading(false);
+            }
+        };
+
+        fetchPlannedTasks();
+    }, [open, sessionNo]);
 
     const handleSubmit = async () => {
         try {
@@ -42,11 +90,24 @@ export const ClockOutDialog = ({ open, onClose, onSubmit }: { open: boolean; onC
         setMode("form");
     };
 
+    // --- Initial Loading UI ---
+    if (initialLoading) {
+        return (
+            <Dialog open={open} onOpenChange={onClose}>
+                <DialogContent className="flex justify-center py-12">
+                    <DialogTitle className="sr-only">読み込み中</DialogTitle>
+                    <Loader size={50} border={4} />
+                </DialogContent>
+            </Dialog>
+        );
+    }
+
     // --- Loading UI ---
     if (mode === "loading") {
         return (
             <Dialog open={open} onOpenChange={onClose}>
                 <DialogContent className="flex justify-center py-12">
+                    <DialogTitle className="sr-only">送信中</DialogTitle>
                     <Loader size={50} border={4} />
                 </DialogContent>
             </Dialog>

@@ -67,7 +67,7 @@ export default function Page() {
       {/* dialogs */}
       <ClockInDialog open={showClockInDialog} onClose={closeDialogs} onSubmit={handleClockIn} />
 
-      <ClockOutDialog open={showClockOutDialog} onClose={closeDialogs} onSubmit={handleClockOut} />
+      <ClockOutDialog open={showClockOutDialog} onClose={closeDialogs} onSubmit={handleClockOut} sessionNo={sessionCount || 1} />
 
       <BreakDialog
         open={showBreakDialog}
