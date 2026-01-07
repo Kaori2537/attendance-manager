@@ -50,7 +50,8 @@ export default async function Page({
   const reportsUrl = new URL(`${backendBase}/database/admin/daily-reports`);
   reportsUrl.searchParams.set("year", String(year));
   reportsUrl.searchParams.set("month", String(month));
-  if (filterUserId) {
+  // "by-user" は表示モード指定なので、APIには渡さない
+  if (filterUserId && filterUserId !== "by-user") {
     reportsUrl.searchParams.set("userId", filterUserId);
   }
 
