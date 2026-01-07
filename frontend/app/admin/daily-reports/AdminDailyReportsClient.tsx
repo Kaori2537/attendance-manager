@@ -612,6 +612,7 @@ function useSessionInteractions(sessionId: string, apiToken: string) {
   const [sendingComment, setSendingComment] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [showCommentInput, setShowCommentInput] = useState(false);
 
   const fetchReactions = async () => {
     if (!apiToken) return;
@@ -780,6 +781,8 @@ function useSessionInteractions(sessionId: string, apiToken: string) {
     handleDeleteComment,
     deleteConfirmId,
     setDeleteConfirmId,
+    showCommentInput,
+    setShowCommentInput,
   };
 }
 
@@ -789,22 +792,17 @@ function ReactionCommentButtonsInline({
   sendingReaction,
   handleReactionToggle,
   comments,
-  newComment,
-  setNewComment,
-  sendingComment,
-  handleSendComment,
+  showCommentInput,
+  setShowCommentInput,
 }: {
   reactionCounts: Record<string, number>;
   sendingReaction: boolean;
   handleReactionToggle: (emoji: string) => void;
   comments: Comment[];
-  newComment: string;
-  setNewComment: (v: string) => void;
-  sendingComment: boolean;
-  handleSendComment: () => void;
+  showCommentInput: boolean;
+  setShowCommentInput: (v: boolean) => void;
 }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showCommentInput, setShowCommentInput] = useState(false);
 
   const hasComments = comments.length > 0;
 
@@ -816,10 +814,10 @@ function ReactionCommentButtonsInline({
           key={e.key}
           onClick={() => handleReactionToggle(e.key)}
           disabled={sendingReaction}
-          className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs bg-muted hover:bg-muted/80 transition-colors disabled:opacity-50"
         >
           <span>{e.label}</span>
-          <span>{reactionCounts[e.key]}</span>
+          <span className="text-muted-foreground">{reactionCounts[e.key]}</span>
         </button>
       ))}
 
@@ -827,7 +825,7 @@ function ReactionCommentButtonsInline({
       <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
         <PopoverTrigger asChild>
           <button
-            className="flex items-center justify-center w-6 h-6 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+            className="flex items-center justify-center w-6 h-6 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
             title="リアクションを追加"
           >
             <SmilePlusIcon className="h-3.5 w-3.5" />
@@ -854,47 +852,18 @@ function ReactionCommentButtonsInline({
       </Popover>
 
       {/* コメントボタン（コメント数バッジ付き） */}
-      <Popover open={showCommentInput} onOpenChange={setShowCommentInput}>
-        <PopoverTrigger asChild>
-          <button
-            className="flex items-center justify-center gap-1 h-6 px-1.5 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
-            title="コメント"
-          >
-            <MessageCircleIcon className="h-3.5 w-3.5" />
-            {hasComments && <span className="text-xs">{comments.length}</span>}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-2" align="start">
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="コメントを入力..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendComment();
-                  setShowCommentInput(false);
-                }
-              }}
-              disabled={sendingComment}
-              className="flex-1 h-8 text-sm"
-              autoFocus
-            />
-            <Button
-              size="icon"
-              onClick={() => {
-                handleSendComment();
-                setShowCommentInput(false);
-              }}
-              disabled={!newComment.trim() || sendingComment}
-              className="h-8 w-8"
-            >
-              <SendIcon className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+      <button
+        onClick={() => setShowCommentInput(!showCommentInput)}
+        className={`flex items-center justify-center gap-1 h-6 px-1.5 rounded-md transition-colors ${
+          showCommentInput
+            ? "bg-muted/80"
+            : "bg-muted hover:bg-muted/80"
+        } text-muted-foreground`}
+        title="コメント"
+      >
+        <MessageCircleIcon className="h-3.5 w-3.5" />
+        {hasComments && <span className="text-xs">{comments.length}</span>}
+      </button>
     </div>
   );
 }
@@ -1046,10 +1015,10 @@ function ReactionCommentSectionDialog({
             key={e.key}
             onClick={() => handleReactionToggle(e.key)}
             disabled={sendingReaction}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm bg-muted hover:bg-muted/80 transition-colors disabled:opacity-50"
           >
             <span>{e.label}</span>
-            <span className="text-xs">{reactionCounts[e.key]}</span>
+            <span className="text-xs text-muted-foreground">{reactionCounts[e.key]}</span>
           </button>
         ))}
 
@@ -1057,7 +1026,7 @@ function ReactionCommentSectionDialog({
         <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
           <PopoverTrigger asChild>
             <button
-              className="flex items-center justify-center w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+              className="flex items-center justify-center w-7 h-7 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
               title="リアクションを追加"
             >
               <SmilePlusIcon className="h-4 w-4" />
@@ -1086,11 +1055,11 @@ function ReactionCommentSectionDialog({
         {/* コメントボタン */}
         <button
           onClick={() => setShowCommentInput(!showCommentInput)}
-          className={`flex items-center justify-center gap-1 h-7 px-2 rounded-full transition-colors ${
+          className={`flex items-center justify-center gap-1 h-7 px-2 rounded-md transition-colors ${
             showCommentInput
-              ? "bg-blue-100 text-blue-700"
-              : "bg-muted hover:bg-muted/80 text-muted-foreground"
-          }`}
+              ? "bg-muted/80"
+              : "bg-muted hover:bg-muted/80"
+          } text-muted-foreground`}
           title="コメント"
         >
           <MessageCircleIcon className="h-4 w-4" />
@@ -1197,10 +1166,10 @@ function ReactionCommentSection({
                 key={e.key}
                 onClick={() => handleReactionToggle(e.key)}
                 disabled={sendingReaction}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm bg-muted hover:bg-muted/80 transition-colors disabled:opacity-50"
               >
                 <span>{e.label}</span>
-                <span className="text-xs">{count}</span>
+                <span className="text-xs text-muted-foreground">{count}</span>
               </button>
             );
           })}
@@ -1209,7 +1178,7 @@ function ReactionCommentSection({
           <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
             <PopoverTrigger asChild>
               <button
-                className="flex items-center justify-center w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+                className="flex items-center justify-center w-7 h-7 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
                 title="リアクションを追加"
               >
                 <SmilePlusIcon className="h-4 w-4" />
@@ -1258,10 +1227,10 @@ function ReactionCommentSection({
                 key={e.key}
                 onClick={() => handleReactionToggle(e.key)}
                 disabled={sendingReaction}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm bg-muted hover:bg-muted/80 transition-colors disabled:opacity-50"
               >
                 <span>{e.label}</span>
-                <span className="text-xs">{count}</span>
+                <span className="text-xs text-muted-foreground">{count}</span>
               </button>
             );
           })}
@@ -1593,6 +1562,51 @@ function SessionSection({ session, isLast, apiToken }: { session: Session; isLas
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* コメント入力欄 */}
+        {interactions.showCommentInput && (
+          <div className="flex items-center gap-2 pl-6">
+            <Input
+              placeholder="コメントを入力..."
+              value={interactions.newComment}
+              onChange={(e) => interactions.setNewComment(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  interactions.handleSendComment();
+                  interactions.setShowCommentInput(false);
+                }
+                if (e.key === "Escape") {
+                  interactions.setShowCommentInput(false);
+                  interactions.setNewComment("");
+                }
+              }}
+              disabled={interactions.sendingComment}
+              className="flex-1"
+              autoFocus
+            />
+            <Button
+              size="icon"
+              onClick={() => {
+                interactions.handleSendComment();
+                interactions.setShowCommentInput(false);
+              }}
+              disabled={!interactions.newComment.trim() || interactions.sendingComment}
+            >
+              <SendIcon className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                interactions.setShowCommentInput(false);
+                interactions.setNewComment("");
+              }}
+            >
+              <XIcon className="h-4 w-4" />
+            </Button>
           </div>
         )}
 
