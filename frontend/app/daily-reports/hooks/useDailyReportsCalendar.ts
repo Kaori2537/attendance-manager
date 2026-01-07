@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type DailyReportsListItem = {
-  date: string; // "YYYY-MM-DD"
+  reportDate: string; // "YYYY-MM-DD"
 };
 
 function parseYMD(ymd: string): Date | null {
@@ -18,7 +18,7 @@ export function useDailyReportsCalendar() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
   const [rawDates, setRawDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,7 +52,7 @@ export function useDailyReportsCalendar() {
         const data = (await res.json()) as DailyReportsListItem[] | { dates?: string[] };
 
         const dates = Array.isArray(data)
-          ? data.map((x) => x.date).filter(Boolean)
+          ? data.map((x) => x.reportDate).filter(Boolean)
           : Array.isArray((data as any)?.dates)
             ? (data as any).dates
             : [];
