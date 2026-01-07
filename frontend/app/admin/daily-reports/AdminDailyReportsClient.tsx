@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import {
@@ -14,10 +13,18 @@ import {
   AlertCircleIcon,
   EyeIcon,
   UserIcon,
+  ClockIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
@@ -31,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Label } from "@/components/ui/label";
 
 type User = {
   id: string;
@@ -54,6 +62,7 @@ type Session = {
   session_no: number;
   summary: string;
   troubles: string;
+  announcements: string;
   tasks: Task[];
   clock_in: string | null;
   clock_out: string | null;
@@ -339,7 +348,7 @@ export default function AdminDailyReportsClient({
             {/* Reports */}
             <div className="space-y-4">
               {user.reports.map((report) => (
-                <ReportCard key={report.id} report={report} userId={user.id} />
+                <ReportCard key={report.id} report={report} userName={user.name} />
               ))}
             </div>
           </div>
@@ -355,7 +364,8 @@ export default function AdminDailyReportsClient({
   );
 }
 
-function ReportCard({ report, userId }: { report: Report; userId: string }) {
+function ReportCard({ report, userName }: { report: Report; userName: string }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
   const dayOfWeek = getDayOfWeek(report.reportDate);
 
   // 内容があるセッションのみ表示
@@ -364,39 +374,182 @@ function ReportCard({ report, userId }: { report: Report; userId: string }) {
   );
 
   return (
-    <div className="rounded-xl border bg-card">
-      <div className="flex items-start gap-6 p-6">
-        {/* Left: Date Info */}
-        <div className="min-w-[140px] space-y-1">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CalendarIcon className="h-4 w-4" />
-            {report.reportDate}
+    <>
+      <div className="rounded-xl border bg-card">
+        <div className="flex items-start gap-6 p-6">
+          {/* Left: Date Info */}
+          <div className="min-w-[140px] space-y-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CalendarIcon className="h-4 w-4" />
+              {report.reportDate}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {dayOfWeek}曜日・{report.sessionCount}セッション
+            </div>
           </div>
-          <div className="text-sm text-muted-foreground">
-            {dayOfWeek}曜日・{report.sessionCount}セッション
+
+          {/* Right: Content - セッションごとに表示 */}
+          <div className="flex-1">
+            {activeSessions.map((session, sessionIndex) => (
+              <SessionSection
+                key={session.id}
+                session={session}
+                isLast={sessionIndex === activeSessions.length - 1}
+              />
+            ))}
           </div>
-        </div>
 
-        {/* Right: Content - セッションごとに表示 */}
-        <div className="flex-1">
-          {activeSessions.map((session, sessionIndex) => (
-            <SessionSection
-              key={session.id}
-              session={session}
-              isLast={sessionIndex === activeSessions.length - 1}
-            />
-          ))}
-        </div>
-
-        {/* Action */}
-        <div>
-          <Link href={`/admin/daily-reports/${userId}/${report.reportDate}`}>
-            <Button variant="ghost" size="icon">
+          {/* Action */}
+          <div>
+            <Button variant="ghost" size="icon" onClick={() => setDialogOpen(true)}>
               <EyeIcon className="h-5 w-5" />
             </Button>
-          </Link>
+          </div>
         </div>
       </div>
+
+      {/* Detail Dialog */}
+      <ReportDetailDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        report={report}
+        userName={userName}
+        sessions={activeSessions}
+      />
+    </>
+  );
+}
+
+function ReportDetailDialog({
+  open,
+  onClose,
+  report,
+  userName,
+  sessions,
+}: {
+  open: boolean;
+  onClose: () => void;
+  report: Report;
+  userName: string;
+  sessions: Session[];
+}) {
+  const dayOfWeek = getDayOfWeek(report.reportDate);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="w-[calc(100%-2rem)] max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+        <DialogHeader>
+          <DialogTitle>{userName}さんの日報</DialogTitle>
+          <DialogDescription>
+            {report.reportDate}（{dayOfWeek}曜日）・{report.sessionCount}セッション
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4">
+          {sessions.map((session, idx) => (
+            <DialogSessionSection key={session.id} session={session} isLast={idx === sessions.length - 1} />
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DialogSessionSection({ session, isLast }: { session: Session; isLast: boolean }) {
+  const plannedTasks = session.tasks.filter((t) => t.kind === "planned");
+  const actualTasks = session.tasks.filter((t) => t.kind === "actual");
+
+  // セッションの出退勤時間を表示
+  const sessionTimeLabel = session.clock_in
+    ? `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`
+    : null;
+
+  // セッションの勤務時間を計算
+  let sessionWorkMinutes = 0;
+  if (session.clock_in && session.clock_out) {
+    const ms = new Date(session.clock_out).getTime() - new Date(session.clock_in).getTime();
+    sessionWorkMinutes = Math.max(0, Math.round(ms / 60000));
+  }
+
+  return (
+    <div className={`space-y-4 ${!isLast ? "border-b pb-6" : ""}`}>
+      {/* Session Header */}
+      <div className="flex items-center gap-2">
+        <ClockIcon className="h-4 w-4 text-muted-foreground" />
+        <span className="font-medium">セッション{session.session_no}</span>
+        {sessionTimeLabel && (
+          <span className="text-sm text-muted-foreground">（{sessionTimeLabel}）</span>
+        )}
+        <span className="text-sm text-muted-foreground">{formatMinutesToHours(sessionWorkMinutes)}</span>
+      </div>
+
+      {/* Planned Tasks - 今日やること */}
+      {plannedTasks.length > 0 && (
+        <div>
+          <Label className="text-base">今日やること</Label>
+          <div className="space-y-2 mt-3">
+            {plannedTasks.map((task) => (
+              <div key={task.id} className="flex gap-2 items-center">
+                <div className="flex-1 px-3 py-2 bg-muted rounded-md text-sm">
+                  {task.title}
+                </div>
+                <div className="w-24 px-3 py-2 bg-muted rounded-md text-sm text-center">
+                  {formatMinutesToHours(task.minutes)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Actual Tasks - 今日やったこと */}
+      {actualTasks.length > 0 && (
+        <div>
+          <Label className="text-base">今日やったこと</Label>
+          <div className="space-y-2 mt-3">
+            {actualTasks.map((task) => (
+              <div key={task.id} className="flex gap-2 items-center">
+                <div className="flex-1 px-3 py-2 bg-muted rounded-md text-sm">
+                  {task.title}
+                </div>
+                <div className="w-24 px-3 py-2 bg-muted rounded-md text-sm text-center">
+                  {formatMinutesToHours(task.minutes)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Summary - 本日のまとめ */}
+      {session.summary && (
+        <div>
+          <Label className="text-base">本日のまとめ（感想・気づき）</Label>
+          <div className="mt-2 px-3 py-3 bg-muted rounded-md text-sm whitespace-pre-wrap">
+            {session.summary}
+          </div>
+        </div>
+      )}
+
+      {/* Troubles - 困っていること */}
+      {session.troubles && (
+        <div>
+          <Label className="text-base text-red-500">困っていること・相談したいこと</Label>
+          <div className="mt-2 px-3 py-3 bg-red-50 border border-red-200 rounded-md text-sm whitespace-pre-wrap">
+            {session.troubles}
+          </div>
+        </div>
+      )}
+
+      {/* Announcements - 連絡事項 */}
+      {session.announcements && (
+        <div>
+          <Label className="text-base">連絡事項</Label>
+          <div className="mt-2 px-3 py-3 bg-muted rounded-md text-sm whitespace-pre-wrap">
+            {session.announcements}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -410,6 +563,13 @@ function SessionSection({ session, isLast }: { session: Session; isLast: boolean
     ? `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`
     : null;
 
+  // セッションの勤務時間を計算
+  let sessionWorkMinutes = 0;
+  if (session.clock_in && session.clock_out) {
+    const ms = new Date(session.clock_out).getTime() - new Date(session.clock_in).getTime();
+    sessionWorkMinutes = Math.max(0, Math.round(ms / 60000));
+  }
+
   return (
     <div className={`${!isLast ? "border-b pb-4 mb-4" : ""}`}>
       <div className="space-y-3">
@@ -421,6 +581,7 @@ function SessionSection({ session, isLast }: { session: Session; isLast: boolean
               <span className="text-sm font-medium text-blue-500">本日のまとめ</span>
               <span className="text-xs text-muted-foreground">セッション{session.session_no}</span>
               {sessionTimeLabel && <span className="text-xs text-muted-foreground">（{sessionTimeLabel}）</span>}
+              {sessionWorkMinutes > 0 && <span className="text-xs text-muted-foreground">{formatMinutesToHours(sessionWorkMinutes)}</span>}
             </div>
             <p className="text-sm pl-6">
               {session.summary}
@@ -460,8 +621,8 @@ function SessionSection({ session, isLast }: { session: Session; isLast: boolean
         {session.troubles && (
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <AlertCircleIcon className="h-4 w-4 text-orange-500" />
-              <span className="text-sm font-medium text-orange-500">
+              <AlertCircleIcon className="h-4 w-4 text-red-500" />
+              <span className="text-sm font-medium text-red-500">
                 困っていること
               </span>
             </div>

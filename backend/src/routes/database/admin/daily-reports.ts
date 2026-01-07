@@ -92,7 +92,7 @@ route.get("/", async (c) => {
     if (reportIds.length > 0) {
       const { data: sessionsData, error: sessionsErr } = await sb
         .from("daily_report_sessions")
-        .select("id, daily_report_id, session_no, summary, planned_minutes, actual_minutes, troubles")
+        .select("id, daily_report_id, session_no, summary, planned_minutes, actual_minutes, troubles, announcements")
         .in("daily_report_id", reportIds)
         .order("session_no", { ascending: true });
 
