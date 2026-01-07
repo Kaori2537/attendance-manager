@@ -431,6 +431,7 @@ function ReportCard({ report, userName, apiToken }: { report: Report; userName: 
                 key={session.id}
                 session={session}
                 isLast={sessionIndex === activeSessions.length - 1}
+                apiToken={apiToken}
               />
             ))}
           </div>
@@ -498,17 +499,6 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
   const plannedTasks = session.tasks.filter((t) => t.kind === "planned");
   const actualTasks = session.tasks.filter((t) => t.kind === "actual");
 
-  // リアクション用の状態
-  const [reactions, setReactions] = useState<Reaction[]>([]);
-  const [sendingReaction, setSendingReaction] = useState(false);
-
-  // コメント用の状態
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [sendingComment, setSendingComment] = useState(false);
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState("");
-
   // セッションの出退勤時間を表示
   const sessionTimeLabel = session.clock_in
     ? `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`
@@ -521,189 +511,8 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
     sessionWorkMinutes = Math.max(0, Math.round(ms / 60000));
   }
 
-  // リアクション取得
-  const fetchReactions = async () => {
-    if (!apiToken) return;
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/add-slack-reaction/${session.id}/reactions`,
-        { headers: { Authorization: `Bearer ${apiToken}` } }
-      );
-      const data = await res.json();
-      if (data.ok) {
-        setReactions(data.reactions ?? []);
-      }
-    } catch (e) {
-      console.error("Failed to fetch reactions:", e);
-    }
-  };
-
-  // コメント取得
-  const fetchComments = async () => {
-    if (!apiToken) return;
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/comments/${session.id}`,
-        { headers: { Authorization: `Bearer ${apiToken}` } }
-      );
-      const data = await res.json();
-      if (data.ok) {
-        setComments(data.comments ?? []);
-      }
-    } catch (e) {
-      console.error("Failed to fetch comments:", e);
-    }
-  };
-
-  // コメント送信
-  const handleSendComment = async () => {
-    if (!apiToken || !newComment.trim() || sendingComment) return;
-    setSendingComment(true);
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/add-slack-comment/${session.id}/comments`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ text: newComment.trim() }),
-        }
-      );
-      const data = await res.json();
-      if (data.ok) {
-        setNewComment("");
-        fetchComments();
-      } else {
-        console.error("Comment failed:", data.error);
-      }
-    } catch (e) {
-      console.error("Comment error:", e);
-    } finally {
-      setSendingComment(false);
-    }
-  };
-
-  // コメント編集開始
-  const handleStartEdit = (comment: Comment) => {
-    setEditingCommentId(comment.id);
-    setEditingText(comment.text);
-  };
-
-  // コメント編集キャンセル
-  const handleCancelEdit = () => {
-    setEditingCommentId(null);
-    setEditingText("");
-  };
-
-  // コメント編集保存
-  const handleSaveEdit = async (commentId: string) => {
-    if (!apiToken || !editingText.trim()) return;
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/comments/${commentId}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${apiToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ text: editingText.trim() }),
-        }
-      );
-      const data = await res.json();
-      if (data.ok) {
-        setEditingCommentId(null);
-        setEditingText("");
-        fetchComments();
-      } else {
-        console.error("Edit comment failed:", data.error);
-      }
-    } catch (e) {
-      console.error("Edit comment error:", e);
-    }
-  };
-
-  // コメント削除
-  const handleDeleteComment = async (commentId: string) => {
-    if (!apiToken) return;
-    if (!confirm("このコメントを削除しますか？")) return;
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/comments/${commentId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${apiToken}` },
-        }
-      );
-      const data = await res.json();
-      if (data.ok) {
-        fetchComments();
-      } else {
-        console.error("Delete comment failed:", data.error);
-      }
-    } catch (e) {
-      console.error("Delete comment error:", e);
-    }
-  };
-
-  // 初回マウント時にデータ取得
-  useEffect(() => {
-    fetchReactions();
-    fetchComments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.id, apiToken]);
-
-  // リアクションのカウントを集計（clock_out のみ）
-  const reactionCounts = reactions
-    .filter((r) => r.kind === "clock_out")
-    .reduce((acc, r) => {
-      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-  // リアクショントグル（追加/削除）
-  const handleReactionToggle = async (emoji: string) => {
-    if (!apiToken || sendingReaction) return;
-
-    const hasReaction = reactionCounts[emoji] > 0;
-    setSendingReaction(true);
-
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/add-slack-reaction/${session.id}/reactions`,
-        {
-          method: hasReaction ? "DELETE" : "POST",
-          headers: {
-            Authorization: `Bearer ${apiToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ emoji, kind: "clock_out" }),
-        }
-      );
-      const data = await res.json();
-      if (data.ok) {
-        fetchReactions();
-      } else {
-        // 詳細なエラー情報をログ出力
-        console.error("Reaction failed:", {
-          error: data.error,
-          slack_error: data.slack_error,
-          slack_status: data.slack_status,
-          sessionId: session.id,
-        });
-        // Slack link not found の場合は静かに失敗（まだSlackに投稿されていないセッション）
-        if (data.error?.includes("Slack link not found")) {
-          console.info("This session has not been posted to Slack yet.");
-        }
-      }
-    } catch (e) {
-      console.error("Reaction error:", e);
-    } finally {
-      setSendingReaction(false);
-    }
-  };
+  // リアクション・コメント機能（共通フック使用）
+  const interactions = useSessionInteractions(session.id, apiToken);
 
   return (
     <div className={`space-y-4 ${!isLast ? "border-b pb-6" : ""}`}>
@@ -786,140 +595,352 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
       )}
 
       {/* Reaction & Comment Section */}
-      <div className="pt-3 border-t space-y-3">
-        {/* Reactions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {EMOJIS.map((e) => {
-            const count = reactionCounts[e.key] || 0;
-            const isActive = count > 0;
-            return (
-              <button
-                key={e.key}
-                onClick={() => handleReactionToggle(e.key)}
-                disabled={sendingReaction}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm transition-colors ${
-                  isActive
-                    ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                    : "bg-muted hover:bg-muted/80 text-muted-foreground"
-                } disabled:opacity-50`}
-              >
-                <span>{e.label}</span>
-                {count > 0 && <span className="text-xs">{count}</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Comment Input */}
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="コメントを入力..."
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSendComment();
-              }
-            }}
-            disabled={sendingComment}
-            className="flex-1"
-          />
-          <Button
-            size="icon"
-            onClick={handleSendComment}
-            disabled={!newComment.trim() || sendingComment}
-          >
-            <SendIcon className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Comment List */}
-        {comments.length > 0 && (
-          <div className="space-y-2">
-            {comments.map((c) => (
-              <div key={c.id} className="bg-muted/50 rounded-md px-3 py-2">
-                {editingCommentId === c.id ? (
-                  /* 編集モード */
-                  <div className="space-y-2">
-                    <Input
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSaveEdit(c.id);
-                        }
-                        if (e.key === "Escape") {
-                          handleCancelEdit();
-                        }
-                      }}
-                      className="text-sm"
-                      autoFocus
-                    />
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleSaveEdit(c.id)}
-                        disabled={!editingText.trim()}
-                        className="h-7 px-2"
-                      >
-                        <CheckIconLucide className="h-3 w-3 mr-1" />
-                        保存
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={handleCancelEdit}
-                        className="h-7 px-2"
-                      >
-                        <XIcon className="h-3 w-3 mr-1" />
-                        キャンセル
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  /* 表示モード */
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <p className="text-sm">{c.text}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(c.created_at), "M/d HH:mm")}
-                        {c.source === "slack" && " (Slack)"}
-                      </p>
-                    </div>
-                    {/* app由来のコメントのみ編集・削除可能 */}
-                    {c.source !== "slack" && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => handleStartEdit(c)}
-                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                          title="編集"
-                        >
-                          <PencilIcon className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteComment(c.id)}
-                          className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
-                          title="削除"
-                        >
-                          <TrashIcon className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <ReactionCommentSection {...interactions} />
     </div>
   );
 }
 
-function SessionSection({ session, isLast }: { session: Session; isLast: boolean }) {
+// リアクション・コメント機能のカスタムフック
+function useSessionInteractions(sessionId: string, apiToken: string) {
+  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [sendingReaction, setSendingReaction] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+
+  const fetchReactions = async () => {
+    if (!apiToken) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/add-slack-reaction/${sessionId}/reactions`,
+        { headers: { Authorization: `Bearer ${apiToken}` } }
+      );
+      const data = await res.json();
+      if (data.ok) {
+        setReactions(data.reactions ?? []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch reactions:", e);
+    }
+  };
+
+  const fetchComments = async () => {
+    if (!apiToken) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/comments/${sessionId}`,
+        { headers: { Authorization: `Bearer ${apiToken}` } }
+      );
+      const data = await res.json();
+      if (data.ok) {
+        setComments(data.comments ?? []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch comments:", e);
+    }
+  };
+
+  const reactionCounts = reactions
+    .filter((r) => r.kind === "clock_out")
+    .reduce((acc, r) => {
+      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+  const handleReactionToggle = async (emoji: string) => {
+    if (!apiToken || sendingReaction) return;
+    const hasReaction = reactionCounts[emoji] > 0;
+    setSendingReaction(true);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/add-slack-reaction/${sessionId}/reactions`,
+        {
+          method: hasReaction ? "DELETE" : "POST",
+          headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ emoji, kind: "clock_out" }),
+        }
+      );
+      const data = await res.json();
+      if (data.ok) {
+        fetchReactions();
+      } else {
+        console.error("Reaction failed:", data.error);
+      }
+    } catch (e) {
+      console.error("Reaction error:", e);
+    } finally {
+      setSendingReaction(false);
+    }
+  };
+
+  const handleSendComment = async () => {
+    if (!apiToken || !newComment.trim() || sendingComment) return;
+    setSendingComment(true);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/add-slack-comment/${sessionId}/comments`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ text: newComment.trim() }),
+        }
+      );
+      const data = await res.json();
+      if (data.ok) {
+        setNewComment("");
+        fetchComments();
+      }
+    } catch (e) {
+      console.error("Comment error:", e);
+    } finally {
+      setSendingComment(false);
+    }
+  };
+
+  const handleStartEdit = (comment: Comment) => {
+    setEditingCommentId(comment.id);
+    setEditingText(comment.text);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCommentId(null);
+    setEditingText("");
+  };
+
+  const handleSaveEdit = async (commentId: string) => {
+    if (!apiToken || !editingText.trim()) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/comments/${commentId}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ text: editingText.trim() }),
+        }
+      );
+      const data = await res.json();
+      if (data.ok) {
+        setEditingCommentId(null);
+        setEditingText("");
+        fetchComments();
+      }
+    } catch (e) {
+      console.error("Edit comment error:", e);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!apiToken) return;
+    if (!confirm("このコメントを削除しますか？")) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/comments/${commentId}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${apiToken}` } }
+      );
+      const data = await res.json();
+      if (data.ok) {
+        fetchComments();
+      }
+    } catch (e) {
+      console.error("Delete comment error:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchReactions();
+    fetchComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, apiToken]);
+
+  return {
+    reactions,
+    reactionCounts,
+    sendingReaction,
+    handleReactionToggle,
+    comments,
+    newComment,
+    setNewComment,
+    sendingComment,
+    handleSendComment,
+    editingCommentId,
+    editingText,
+    setEditingText,
+    handleStartEdit,
+    handleCancelEdit,
+    handleSaveEdit,
+    handleDeleteComment,
+  };
+}
+
+// リアクション・コメントUI（共通コンポーネント）
+function ReactionCommentSection({
+  reactionCounts,
+  sendingReaction,
+  handleReactionToggle,
+  comments,
+  newComment,
+  setNewComment,
+  sendingComment,
+  handleSendComment,
+  editingCommentId,
+  editingText,
+  setEditingText,
+  handleStartEdit,
+  handleCancelEdit,
+  handleSaveEdit,
+  handleDeleteComment,
+  compact = false,
+}: {
+  reactionCounts: Record<string, number>;
+  sendingReaction: boolean;
+  handleReactionToggle: (emoji: string) => void;
+  comments: Comment[];
+  newComment: string;
+  setNewComment: (v: string) => void;
+  sendingComment: boolean;
+  handleSendComment: () => void;
+  editingCommentId: string | null;
+  editingText: string;
+  setEditingText: (v: string) => void;
+  handleStartEdit: (c: Comment) => void;
+  handleCancelEdit: () => void;
+  handleSaveEdit: (id: string) => void;
+  handleDeleteComment: (id: string) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`space-y-3 ${compact ? "pt-2" : "pt-3 border-t"}`}>
+      {/* Reactions */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {EMOJIS.map((e) => {
+          const count = reactionCounts[e.key] || 0;
+          const isActive = count > 0;
+          return (
+            <button
+              key={e.key}
+              onClick={() => handleReactionToggle(e.key)}
+              disabled={sendingReaction}
+              className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm transition-colors ${
+                isActive
+                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  : "bg-muted hover:bg-muted/80 text-muted-foreground"
+              } disabled:opacity-50`}
+            >
+              <span>{e.label}</span>
+              {count > 0 && <span className="text-xs">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Comment Input */}
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="コメントを入力..."
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSendComment();
+            }
+          }}
+          disabled={sendingComment}
+          className="flex-1"
+        />
+        <Button
+          size="icon"
+          onClick={handleSendComment}
+          disabled={!newComment.trim() || sendingComment}
+        >
+          <SendIcon className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Comment List */}
+      {comments.length > 0 && (
+        <div className="space-y-2">
+          {comments.map((c) => (
+            <div key={c.id} className="bg-muted/50 rounded-md px-3 py-2">
+              {editingCommentId === c.id ? (
+                <div className="space-y-2">
+                  <Input
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveEdit(c.id);
+                      }
+                      if (e.key === "Escape") {
+                        handleCancelEdit();
+                      }
+                    }}
+                    className="text-sm"
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleSaveEdit(c.id)}
+                      disabled={!editingText.trim()}
+                      className="h-7 px-2"
+                    >
+                      <CheckIconLucide className="h-3 w-3 mr-1" />
+                      保存
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCancelEdit}
+                      className="h-7 px-2"
+                    >
+                      <XIcon className="h-3 w-3 mr-1" />
+                      キャンセル
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="text-sm">{c.text}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {format(new Date(c.created_at), "M/d HH:mm")}
+                      {c.source === "slack" && " (Slack)"}
+                    </p>
+                  </div>
+                  {c.source !== "slack" && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleStartEdit(c)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="編集"
+                      >
+                        <PencilIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteComment(c.id)}
+                        className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                        title="削除"
+                      >
+                        <TrashIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionSection({ session, isLast, apiToken }: { session: Session; isLast: boolean; apiToken: string }) {
   const actualTasks = session.tasks.filter((t) => t.kind === "actual");
   const totalMinutes = actualTasks.reduce((sum, t) => sum + t.minutes, 0);
 
@@ -934,6 +955,9 @@ function SessionSection({ session, isLast }: { session: Session; isLast: boolean
     const ms = new Date(session.clock_out).getTime() - new Date(session.clock_in).getTime();
     sessionWorkMinutes = Math.max(0, Math.round(ms / 60000));
   }
+
+  // リアクション・コメント機能
+  const interactions = useSessionInteractions(session.id, apiToken);
 
   return (
     <div className={`${!isLast ? "border-b pb-4 mb-4" : ""}`}>
@@ -994,6 +1018,9 @@ function SessionSection({ session, isLast }: { session: Session; isLast: boolean
             <p className="text-sm pl-6">{session.troubles}</p>
           </div>
         )}
+
+        {/* Reaction & Comment Section */}
+        <ReactionCommentSection {...interactions} compact />
       </div>
     </div>
   );
