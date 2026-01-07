@@ -519,7 +519,7 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
 
   return (
     <div className={`space-y-4 ${!isLast ? "border-b pb-6" : ""}`}>
-      {/* Session Header */}
+      {/* Session Header with Reaction/Comment buttons */}
       <div className="flex items-center gap-2">
         <ClockIcon className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium">セッション{session.session_no}</span>
@@ -527,6 +527,8 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
           <span className="text-sm text-muted-foreground">（{sessionTimeLabel}）</span>
         )}
         <span className="text-sm text-muted-foreground">{formatMinutesToHours(sessionWorkMinutes)}</span>
+        <div className="flex-1" />
+        <ReactionCommentButtonsInline {...interactions} />
       </div>
 
       {/* Planned Tasks - 今日やること */}
@@ -599,8 +601,143 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
         </div>
       )}
 
-      {/* Reaction & Comment Section - 右端 */}
-      <ReactionCommentSectionDialog {...interactions} />
+      {/* Comments - セッション内容の一番下 */}
+      {interactions.comments.length > 0 && (
+        <div className="space-y-2">
+          {interactions.comments.map((c) => (
+            <div key={c.id} className="bg-muted/50 rounded-md px-3 py-2 text-sm">
+              {interactions.editingCommentId === c.id ? (
+                <div className="space-y-2">
+                  <Input
+                    value={interactions.editingText}
+                    onChange={(e) => interactions.setEditingText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        interactions.handleSaveEdit(c.id);
+                      }
+                      if (e.key === "Escape") {
+                        interactions.handleCancelEdit();
+                      }
+                    }}
+                    className="text-sm"
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => interactions.handleSaveEdit(c.id)}
+                      disabled={!interactions.editingText.trim()}
+                      className="h-7 px-2"
+                    >
+                      <CheckIconLucide className="h-3 w-3 mr-1" />
+                      保存
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={interactions.handleCancelEdit}
+                      className="h-7 px-2"
+                    >
+                      <XIcon className="h-3 w-3 mr-1" />
+                      キャンセル
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p>{c.text}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {format(new Date(c.created_at), "M/d HH:mm")}
+                      {c.source === "slack" && " (Slack)"}
+                    </p>
+                  </div>
+                  {c.source !== "slack" && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => interactions.handleStartEdit(c)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="編集"
+                      >
+                        <PencilIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => interactions.setDeleteConfirmId(c.id)}
+                        className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                        title="削除"
+                      >
+                        <TrashIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* コメント入力欄 */}
+      {interactions.showCommentInput && (
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="コメントを入力..."
+            value={interactions.newComment}
+            onChange={(e) => interactions.setNewComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                interactions.handleSendComment();
+                interactions.setShowCommentInput(false);
+              }
+              if (e.key === "Escape") {
+                interactions.setShowCommentInput(false);
+                interactions.setNewComment("");
+              }
+            }}
+            disabled={interactions.sendingComment}
+            className="flex-1"
+            autoFocus
+          />
+          <Button
+            size="icon"
+            onClick={() => {
+              interactions.handleSendComment();
+              interactions.setShowCommentInput(false);
+            }}
+            disabled={!interactions.newComment.trim() || interactions.sendingComment}
+          >
+            <SendIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => {
+              interactions.setShowCommentInput(false);
+              interactions.setNewComment("");
+            }}
+          >
+            <XIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* 削除確認ダイアログ */}
+      <Dialog open={!!interactions.deleteConfirmId} onOpenChange={(open) => !open && interactions.setDeleteConfirmId(null)}>
+        <DialogContent className="flex flex-col items-center text-center py-10">
+          <TrashIcon className="h-12 w-12 text-red-500 mb-4" />
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-center">コメントの削除</DialogTitle>
+            <DialogDescription className="text-center">このコメントを削除しますか？</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex gap-2 justify-center">
+            <Button variant="outline" onClick={() => interactions.setDeleteConfirmId(null)}>キャンセル</Button>
+            <Button variant="destructive" onClick={() => interactions.deleteConfirmId && interactions.handleDeleteComment(interactions.deleteConfirmId)}>削除</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
