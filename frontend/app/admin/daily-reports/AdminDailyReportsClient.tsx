@@ -533,37 +533,39 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
       {plannedTasks.length > 0 && (
         <div>
           <Label className="text-base">今日やること</Label>
-          <div className="space-y-2 mt-3">
+          <ul className="mt-2 space-y-1 pl-1">
             {plannedTasks.map((task) => (
-              <div key={task.id} className="flex gap-2 items-center">
-                <div className="flex-1 px-3 py-2 bg-muted rounded-md text-sm">
+              <li key={task.id} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <span className="text-muted-foreground">•</span>
                   {task.title}
-                </div>
-                <div className="w-24 px-3 py-2 bg-muted rounded-md text-sm text-center">
+                </span>
+                <span className="text-muted-foreground">
                   {formatMinutesToHours(task.minutes)}
-                </div>
-              </div>
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
 
-      {/* Actual Tasks - 今日やったこと */}
+      {/* Actual Tasks - 今日の実績 */}
       {actualTasks.length > 0 && (
         <div>
-          <Label className="text-base">今日やったこと</Label>
-          <div className="space-y-2 mt-3">
+          <Label className="text-base">今日の実績</Label>
+          <ul className="mt-2 space-y-1 pl-1">
             {actualTasks.map((task) => (
-              <div key={task.id} className="flex gap-2 items-center">
-                <div className="flex-1 px-3 py-2 bg-muted rounded-md text-sm">
+              <li key={task.id} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <span className="text-muted-foreground">•</span>
                   {task.title}
-                </div>
-                <div className="w-24 px-3 py-2 bg-muted rounded-md text-sm text-center">
+                </span>
+                <span className="text-muted-foreground">
                   {formatMinutesToHours(task.minutes)}
-                </div>
-              </div>
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
 
@@ -571,9 +573,9 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
       {session.summary && (
         <div>
           <Label className="text-base">本日のまとめ（感想・気づき）</Label>
-          <div className="mt-2 px-3 py-3 bg-muted rounded-md text-sm whitespace-pre-wrap">
+          <p className="mt-2 pl-1 text-sm whitespace-pre-wrap">
             {session.summary}
-          </div>
+          </p>
         </div>
       )}
 
@@ -581,9 +583,9 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
       {session.troubles && (
         <div>
           <Label className="text-base text-red-500">困っていること・相談したいこと</Label>
-          <div className="mt-2 px-3 py-3 bg-red-50 border border-red-200 rounded-md text-sm whitespace-pre-wrap">
+          <p className="mt-2 pl-1 text-sm whitespace-pre-wrap text-red-600">
             {session.troubles}
-          </div>
+          </p>
         </div>
       )}
 
@@ -591,9 +593,9 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
       {session.announcements && (
         <div>
           <Label className="text-base">連絡事項</Label>
-          <div className="mt-2 px-3 py-3 bg-muted rounded-md text-sm whitespace-pre-wrap">
+          <p className="mt-2 pl-1 text-sm whitespace-pre-wrap">
             {session.announcements}
-          </div>
+          </p>
         </div>
       )}
 
