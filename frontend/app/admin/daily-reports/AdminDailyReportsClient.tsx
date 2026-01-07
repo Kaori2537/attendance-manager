@@ -597,8 +597,8 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
         </div>
       )}
 
-      {/* Reaction & Comment Section */}
-      <ReactionCommentSection {...interactions} />
+      {/* Reaction & Comment Section - 右端 */}
+      <ReactionCommentSectionDialog {...interactions} />
     </div>
   );
 }
@@ -895,6 +895,249 @@ function ReactionCommentButtonsInline({
           </div>
         </PopoverContent>
       </Popover>
+    </div>
+  );
+}
+
+// リアクション・コメントUI（詳細ダイアログ用）- ボタンは右端、入力は幅広
+function ReactionCommentSectionDialog({
+  reactionCounts,
+  sendingReaction,
+  handleReactionToggle,
+  comments,
+  newComment,
+  setNewComment,
+  sendingComment,
+  handleSendComment,
+  editingCommentId,
+  editingText,
+  setEditingText,
+  handleStartEdit,
+  handleCancelEdit,
+  handleSaveEdit,
+  handleDeleteComment,
+  deleteConfirmId,
+  setDeleteConfirmId,
+}: {
+  reactionCounts: Record<string, number>;
+  sendingReaction: boolean;
+  handleReactionToggle: (emoji: string) => void;
+  comments: Comment[];
+  newComment: string;
+  setNewComment: (v: string) => void;
+  sendingComment: boolean;
+  handleSendComment: () => void;
+  editingCommentId: string | null;
+  editingText: string;
+  setEditingText: (v: string) => void;
+  handleStartEdit: (c: Comment) => void;
+  handleCancelEdit: () => void;
+  handleSaveEdit: (id: string) => void;
+  handleDeleteComment: (id: string) => void;
+  deleteConfirmId: string | null;
+  setDeleteConfirmId: (id: string | null) => void;
+}) {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+
+  const handleSendAndClose = () => {
+    handleSendComment();
+    setShowCommentInput(false);
+  };
+
+  return (
+    <div className="space-y-3 pt-3 border-t">
+      {/* コメント一覧 - ボタンの上 */}
+      {comments.length > 0 && (
+        <div className="space-y-2">
+          {comments.map((c) => (
+            <div key={c.id} className="bg-muted/50 rounded-md px-3 py-2">
+              {editingCommentId === c.id ? (
+                <div className="space-y-2">
+                  <Input
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveEdit(c.id);
+                      }
+                      if (e.key === "Escape") handleCancelEdit();
+                    }}
+                    className="text-sm"
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleSaveEdit(c.id)}
+                      disabled={!editingText.trim()}
+                      className="h-7 px-2"
+                    >
+                      <CheckIconLucide className="h-3 w-3 mr-1" />
+                      保存
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCancelEdit}
+                      className="h-7 px-2"
+                    >
+                      <XIcon className="h-3 w-3 mr-1" />
+                      キャンセル
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="text-sm">{c.text}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {format(new Date(c.created_at), "M/d HH:mm")}
+                      {c.source === "slack" && " (Slack)"}
+                    </p>
+                  </div>
+                  {c.source !== "slack" && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleStartEdit(c)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="編集"
+                      >
+                        <PencilIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmId(c.id)}
+                        className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                        title="削除"
+                      >
+                        <TrashIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 削除確認ダイアログ */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <DialogContent className="flex flex-col items-center text-center py-10">
+          <TrashIcon className="h-12 w-12 text-red-500 mb-4" />
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-center">コメントの削除</DialogTitle>
+            <DialogDescription className="text-center">このコメントを削除しますか？</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex gap-2 justify-center">
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>キャンセル</Button>
+            <Button variant="destructive" onClick={() => deleteConfirmId && handleDeleteComment(deleteConfirmId)}>削除</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ボタン行 - 右端 */}
+      <div className="flex items-center justify-end gap-1.5">
+        {/* Existing Reactions */}
+        {EMOJIS.filter((e) => reactionCounts[e.key] > 0).map((e) => (
+          <button
+            key={e.key}
+            onClick={() => handleReactionToggle(e.key)}
+            disabled={sendingReaction}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+          >
+            <span>{e.label}</span>
+            <span className="text-xs">{reactionCounts[e.key]}</span>
+          </button>
+        ))}
+
+        {/* リアクション追加ボタン */}
+        <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+          <PopoverTrigger asChild>
+            <button
+              className="flex items-center justify-center w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+              title="リアクションを追加"
+            >
+              <SmilePlusIcon className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-2" align="end">
+            <div className="flex items-center gap-1">
+              {EMOJIS.map((e) => (
+                <button
+                  key={e.key}
+                  onClick={() => {
+                    handleReactionToggle(e.key);
+                    setShowEmojiPicker(false);
+                  }}
+                  disabled={sendingReaction}
+                  className="p-1.5 rounded hover:bg-muted transition-colors text-lg disabled:opacity-50"
+                  title={e.key}
+                >
+                  {e.label}
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* コメントボタン */}
+        <button
+          onClick={() => setShowCommentInput(!showCommentInput)}
+          className={`flex items-center justify-center gap-1 h-7 px-2 rounded-full transition-colors ${
+            showCommentInput
+              ? "bg-blue-100 text-blue-700"
+              : "bg-muted hover:bg-muted/80 text-muted-foreground"
+          }`}
+          title="コメント"
+        >
+          <MessageCircleIcon className="h-4 w-4" />
+          {comments.length > 0 && <span className="text-xs">{comments.length}</span>}
+        </button>
+      </div>
+
+      {/* コメント入力 - 幅広 */}
+      {showCommentInput && (
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="コメントを入力..."
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendAndClose();
+              }
+              if (e.key === "Escape") {
+                setShowCommentInput(false);
+                setNewComment("");
+              }
+            }}
+            disabled={sendingComment}
+            className="flex-1"
+            autoFocus
+          />
+          <Button
+            size="icon"
+            onClick={handleSendAndClose}
+            disabled={!newComment.trim() || sendingComment}
+          >
+            <SendIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => {
+              setShowCommentInput(false);
+              setNewComment("");
+            }}
+          >
+            <XIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
