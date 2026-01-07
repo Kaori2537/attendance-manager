@@ -1572,29 +1572,13 @@ function SessionSection({ session, isLast, apiToken }: { session: Session; isLas
           <ReactionCommentButtonsInline {...interactions} />
         </div>
 
-        {/* Memo */}
-        {session.summary && (
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <MessageSquareIcon className="h-4 w-4 text-blue-500" />
-              <span className="text-sm font-medium text-blue-500">本日のまとめ</span>
-            </div>
-            <p className="text-sm pl-6">
-              {session.summary}
-            </p>
-          </div>
-        )}
-
         {/* Actual Tasks */}
         {actualTasks.length > 0 && (
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <CheckIcon className="h-4 w-4 text-green-500" />
-              <span className="text-sm font-medium text-green-500">
-                今日の実績（{formatMinutesToHours(totalMinutes)}）
-              </span>
-            </div>
-            <ul className="space-y-1 pl-6">
+            <span className="text-sm font-medium">
+              今日の実績（{formatMinutesToHours(totalMinutes)}）
+            </span>
+            <ul className="space-y-1 pl-1">
               {actualTasks.map((task) => (
                 <li
                   key={task.id}
@@ -1613,16 +1597,23 @@ function SessionSection({ session, isLast, apiToken }: { session: Session; isLas
           </div>
         )}
 
+        {/* Memo */}
+        {session.summary && (
+          <div className="space-y-1">
+            <span className="text-sm font-medium">本日のまとめ</span>
+            <p className="text-sm pl-1">
+              {session.summary}
+            </p>
+          </div>
+        )}
+
         {/* Trouble */}
         {session.troubles && (
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <AlertCircleIcon className="h-4 w-4 text-red-500" />
-              <span className="text-sm font-medium text-red-500">
-                困っていること
-              </span>
-            </div>
-            <p className="text-sm pl-6">{session.troubles}</p>
+            <span className="text-sm font-medium text-red-500">
+              困っていること
+            </span>
+            <p className="text-sm pl-1 text-red-600">{session.troubles}</p>
           </div>
         )}
 
