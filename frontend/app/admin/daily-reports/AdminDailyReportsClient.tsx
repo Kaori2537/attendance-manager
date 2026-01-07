@@ -661,134 +661,139 @@ function TimelineSessionCard({
   return (
     <>
     <div className="rounded-xl border bg-card p-6">
-      {/* Header: ユーザー名・時間 */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex items-center gap-2 text-sm font-medium">
+      {/* Header: ユーザー名 + セッション情報を横並び */}
+      <div className="flex items-start gap-8">
+        {/* 左: ユーザー名 */}
+        <div className="flex items-center gap-2 text-sm font-medium shrink-0 h-8">
           <UserIcon className="h-4 w-4" />
           {session.userName}
         </div>
-        <span className="text-sm text-muted-foreground">
-          セッション{session.session_no}
-        </span>
-        <span className="text-sm text-muted-foreground">
-          {sessionTimeLabel ?? "--:--"}{sessionWorkMinutes > 0 && ` / ${formatMinutesToHours(sessionWorkMinutes)}`}
-        </span>
-        {showDate && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CalendarIcon className="h-4 w-4" />
-            {session.reportDate}（{dayOfWeek}）
-          </div>
-        )}
-        <div className="flex-1" />
-        <ReactionCommentButtonsInline {...interactions} />
-        <Button variant="ghost" size="icon" onClick={() => setDialogOpen(true)}>
-          <EyeIcon className="h-5 w-5" />
-        </Button>
-      </div>
 
-      {/* Content */}
-      <div className="space-y-3">
-        {/* Actual Tasks */}
-        {actualTasks.length > 0 && (
-          <div className="space-y-1">
-            <span className="text-sm font-medium">
-              今日の実績（{formatMinutesToHours(totalMinutes)}）
+        {/* 右: セッション情報 + コンテンツ */}
+        <div className="flex-1 min-w-0">
+          {/* セッションヘッダー */}
+          <div className="flex items-center gap-3 mb-3 h-8">
+            <span className="text-sm text-muted-foreground">
+              セッション{session.session_no}（{sessionTimeLabel ?? "--:--"}）{sessionWorkMinutes > 0 && ` ${formatMinutesToHours(sessionWorkMinutes)}`}
             </span>
-            <ul className="space-y-1 pl-1">
-              {actualTasks.map((task) => (
-                <li key={task.id} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="text-muted-foreground">•</span>
-                    {task.title}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {formatMinutesToHours(task.minutes)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Memo */}
-        {session.summary && (
-          <div className="space-y-1">
-            <span className="text-sm font-medium">本日のまとめ</span>
-            <p className="text-sm pl-1">{session.summary}</p>
-          </div>
-        )}
-
-        {/* Trouble */}
-        {session.troubles && (
-          <div className="space-y-1">
-            <span className="text-sm font-medium text-red-500">困っていること</span>
-            <p className="text-sm pl-1 text-red-600">{session.troubles}</p>
-          </div>
-        )}
-
-        {/* Comments */}
-        {interactions.comments.length > 0 && (
-          <div className="space-y-2 pl-6">
-            {interactions.comments.map((c) => (
-              <div key={c.id} className="bg-muted/50 rounded-md px-3 py-2 text-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <p>{c.text}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {format(new Date(c.created_at), "M/d HH:mm")}
-                      {c.source === "slack" && " (Slack)"}
-                    </p>
-                  </div>
-                </div>
+            {showDate && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CalendarIcon className="h-4 w-4" />
+                {session.reportDate}（{dayOfWeek}）
               </div>
-            ))}
+            )}
+            <div className="flex-1" />
+            <ReactionCommentButtonsInline {...interactions} />
+            <Button variant="ghost" size="icon" onClick={() => setDialogOpen(true)}>
+              <EyeIcon className="h-5 w-5" />
+            </Button>
           </div>
-        )}
 
-        {/* コメント入力欄 */}
-        {interactions.showCommentInput && (
-          <div className="flex items-center gap-2 pl-6">
-            <Input
-              placeholder="コメントを入力..."
-              value={interactions.newComment}
-              onChange={(e) => interactions.setNewComment(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  interactions.handleSendComment();
-                  interactions.setShowCommentInput(false);
-                }
-                if (e.key === "Escape") {
-                  interactions.setShowCommentInput(false);
-                  interactions.setNewComment("");
-                }
-              }}
-              disabled={interactions.sendingComment}
-              className="flex-1"
-              autoFocus
-            />
-            <Button
-              size="icon"
-              onClick={() => {
-                interactions.handleSendComment();
-                interactions.setShowCommentInput(false);
-              }}
-              disabled={!interactions.newComment.trim() || interactions.sendingComment}
-            >
-              <SendIcon className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => {
-                interactions.setShowCommentInput(false);
-                interactions.setNewComment("");
-              }}
-            >
-              <XIcon className="h-4 w-4" />
-            </Button>
+          {/* Content */}
+          <div className="space-y-3">
+            {/* Actual Tasks */}
+            {actualTasks.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-sm font-medium">
+                  今日の実績（{formatMinutesToHours(totalMinutes)}）
+                </span>
+                <ul className="space-y-1 pl-1">
+                  {actualTasks.map((task) => (
+                    <li key={task.id} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="text-muted-foreground">•</span>
+                        {task.title}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {formatMinutesToHours(task.minutes)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Memo */}
+            {session.summary && (
+              <div className="space-y-1">
+                <span className="text-sm font-medium">本日のまとめ</span>
+                <p className="text-sm pl-1">{session.summary}</p>
+              </div>
+            )}
+
+            {/* Trouble */}
+            {session.troubles && (
+              <div className="space-y-1">
+                <span className="text-sm font-medium text-red-500">困っていること</span>
+                <p className="text-sm pl-1 text-red-600">{session.troubles}</p>
+              </div>
+            )}
+
+            {/* Comments */}
+            {interactions.comments.length > 0 && (
+              <div className="space-y-2">
+                {interactions.comments.map((c) => (
+                  <div key={c.id} className="bg-muted/50 rounded-md px-3 py-2 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <p>{c.text}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {format(new Date(c.created_at), "M/d HH:mm")}
+                          {c.source === "slack" && " (Slack)"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* コメント入力欄 */}
+            {interactions.showCommentInput && (
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="コメントを入力..."
+                  value={interactions.newComment}
+                  onChange={(e) => interactions.setNewComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      interactions.handleSendComment();
+                      interactions.setShowCommentInput(false);
+                    }
+                    if (e.key === "Escape") {
+                      interactions.setShowCommentInput(false);
+                      interactions.setNewComment("");
+                    }
+                  }}
+                  disabled={interactions.sendingComment}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button
+                  size="icon"
+                  onClick={() => {
+                    interactions.handleSendComment();
+                    interactions.setShowCommentInput(false);
+                  }}
+                  disabled={!interactions.newComment.trim() || interactions.sendingComment}
+                >
+                  <SendIcon className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => {
+                    interactions.setShowCommentInput(false);
+                    interactions.setNewComment("");
+                  }}
+                >
+                  <XIcon className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
 
