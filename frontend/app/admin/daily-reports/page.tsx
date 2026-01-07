@@ -71,6 +71,7 @@ export default async function Page({
       filterUserId={filterUserId}
       filterDate={filterDate}
       viewMode={viewMode}
+      apiToken={apiToken}
     />
   );
 }

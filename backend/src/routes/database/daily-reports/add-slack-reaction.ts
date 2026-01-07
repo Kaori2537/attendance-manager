@@ -43,6 +43,25 @@ async function requireAdmin(c: any) {
 }
 
 export default new Hono<{ Bindings: Env }>()
+  // リアクション一覧を取得
+  .get("/:sessionId/reactions", async (c) => {
+    const sessionId = c.req.param("sessionId");
+
+    const guard = await requireAdmin(c);
+    if (!guard.ok) return guard.res;
+
+    const sb = getSupabaseAdminClient(c.env);
+
+    const { data, error } = await sb
+      .from("daily_report_reactions")
+      .select("id, emoji, kind, source, created_at")
+      .eq("daily_report_session_id", sessionId)
+      .order("created_at", { ascending: true });
+
+    if (error) return c.json({ ok: false, error: `daily_report_reactions select: ${error.message}` }, 500);
+
+    return c.json({ ok: true, reactions: data ?? [] });
+  })
   .post("/:sessionId/reactions", async (c) => {
     const sessionId = c.req.param("sessionId");
 
@@ -84,7 +103,9 @@ export default new Hono<{ Bindings: Env }>()
     });
 
     const slackJson = (await slackRes.json().catch(() => ({}))) as SlackApiResponse;
-    if (!slackRes.ok || !slackJson.ok) {
+    // already_reacted は「すでにリアクション済み」なので成功扱い
+    const isAlreadyReacted = slackJson.error === "already_reacted";
+    if (!slackRes.ok || (!slackJson.ok && !isAlreadyReacted)) {
       return c.json(
         {
           ok: false,
@@ -151,7 +172,9 @@ export default new Hono<{ Bindings: Env }>()
     });
 
     const slackJson = (await slackRes.json().catch(() => ({}))) as SlackApiResponse;
-    if (!slackRes.ok || !slackJson.ok) {
+    // no_reaction は「リアクションが存在しない」なので成功扱い
+    const isNoReaction = slackJson.error === "no_reaction";
+    if (!slackRes.ok || (!slackJson.ok && !isNoReaction)) {
       return c.json(
         {
           ok: false,

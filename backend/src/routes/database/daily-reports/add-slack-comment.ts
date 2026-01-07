@@ -80,20 +80,26 @@ route.post("/:sessionId/comments", async (c) => {
       text,
     });
 
-    // 3) DB 保存（actor は admin の user id）
-    const { error: insErr } = await sb.from("daily_report_comments").insert({
-      daily_report_session_id: sessionId,
-      user_id: payload.id,
-      slack_user_id: null,
-      text,
-      source: "app",
-      // 必要なら slack_event_id 等も保存できる
-      // slack_event_id: commentTs, // ← schema次第
-    });
+    // 3) DB 保存（actor は admin の user id + Slack連携情報も保存）
+    const { data: insertedComment, error: insErr } = await sb
+      .from("daily_report_comments")
+      .insert({
+        daily_report_session_id: sessionId,
+        user_id: payload.id,
+        slack_user_id: null,
+        text,
+        source: "app",
+        // Slack連携情報（編集・削除時に必要）
+        slack_channel_id: link.channel_id,
+        slack_thread_ts: link.message_ts,
+        slack_message_ts: commentTs,
+      })
+      .select("id")
+      .single();
 
     if (insErr) return c.json({ ok: false, error: insErr.message }, 500);
 
-    return c.json({ ok: true, slackTs: commentTs });
+    return c.json({ ok: true, slackTs: commentTs, commentId: insertedComment?.id });
   } catch (e: any) {
     console.error("[add-slack-comment] error:", e);
     return c.json({ ok: false, error: e?.message ?? String(e) }, 500);
