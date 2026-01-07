@@ -19,6 +19,8 @@ import {
   TrashIcon,
   XIcon,
   CheckIcon as CheckIconLucide,
+  SmilePlusIcon,
+  MessageCircleIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Popover,
@@ -731,9 +734,11 @@ function useSessionInteractions(sessionId: string, apiToken: string) {
     }
   };
 
+  // 削除確認ダイアログ用のstate
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   const handleDeleteComment = async (commentId: string) => {
     if (!apiToken) return;
-    if (!confirm("このコメントを削除しますか？")) return;
     try {
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/database/daily-reports/comments/${commentId}`,
@@ -745,6 +750,8 @@ function useSessionInteractions(sessionId: string, apiToken: string) {
       }
     } catch (e) {
       console.error("Delete comment error:", e);
+    } finally {
+      setDeleteConfirmId(null);
     }
   };
 
@@ -771,10 +778,128 @@ function useSessionInteractions(sessionId: string, apiToken: string) {
     handleCancelEdit,
     handleSaveEdit,
     handleDeleteComment,
+    deleteConfirmId,
+    setDeleteConfirmId,
   };
 }
 
-// リアクション・コメントUI（共通コンポーネント）
+// インライン用リアクション・コメントボタン（セッションヘッダー横に表示）
+function ReactionCommentButtonsInline({
+  reactionCounts,
+  sendingReaction,
+  handleReactionToggle,
+  comments,
+  newComment,
+  setNewComment,
+  sendingComment,
+  handleSendComment,
+}: {
+  reactionCounts: Record<string, number>;
+  sendingReaction: boolean;
+  handleReactionToggle: (emoji: string) => void;
+  comments: Comment[];
+  newComment: string;
+  setNewComment: (v: string) => void;
+  sendingComment: boolean;
+  handleSendComment: () => void;
+}) {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+
+  const hasComments = comments.length > 0;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {/* 既存のリアクション */}
+      {EMOJIS.filter((e) => reactionCounts[e.key] > 0).map((e) => (
+        <button
+          key={e.key}
+          onClick={() => handleReactionToggle(e.key)}
+          disabled={sendingReaction}
+          className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+        >
+          <span>{e.label}</span>
+          <span>{reactionCounts[e.key]}</span>
+        </button>
+      ))}
+
+      {/* リアクション追加ボタン */}
+      <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+        <PopoverTrigger asChild>
+          <button
+            className="flex items-center justify-center w-6 h-6 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+            title="リアクションを追加"
+          >
+            <SmilePlusIcon className="h-3.5 w-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2" align="start">
+          <div className="flex items-center gap-1">
+            {EMOJIS.map((e) => (
+              <button
+                key={e.key}
+                onClick={() => {
+                  handleReactionToggle(e.key);
+                  setShowEmojiPicker(false);
+                }}
+                disabled={sendingReaction}
+                className="p-1.5 rounded hover:bg-muted transition-colors text-lg disabled:opacity-50"
+                title={e.key}
+              >
+                {e.label}
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* コメントボタン（コメント数バッジ付き） */}
+      <Popover open={showCommentInput} onOpenChange={setShowCommentInput}>
+        <PopoverTrigger asChild>
+          <button
+            className="flex items-center justify-center gap-1 h-6 px-1.5 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+            title="コメント"
+          >
+            <MessageCircleIcon className="h-3.5 w-3.5" />
+            {hasComments && <span className="text-xs">{comments.length}</span>}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-2" align="start">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="コメントを入力..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendComment();
+                  setShowCommentInput(false);
+                }
+              }}
+              disabled={sendingComment}
+              className="flex-1 h-8 text-sm"
+              autoFocus
+            />
+            <Button
+              size="icon"
+              onClick={() => {
+                handleSendComment();
+                setShowCommentInput(false);
+              }}
+              disabled={!newComment.trim() || sendingComment}
+              className="h-8 w-8"
+            >
+              <SendIcon className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+// リアクション・コメントUI（共通コンポーネント）- Slack風ホバーツールバー
 function ReactionCommentSection({
   reactionCounts,
   sendingReaction,
@@ -810,54 +935,140 @@ function ReactionCommentSection({
   handleDeleteComment: (id: string) => void;
   compact?: boolean;
 }) {
-  return (
-    <div className={`space-y-3 ${compact ? "pt-2" : "pt-3 border-t"}`}>
-      {/* Reactions */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {EMOJIS.map((e) => {
-          const count = reactionCounts[e.key] || 0;
-          const isActive = count > 0;
-          return (
-            <button
-              key={e.key}
-              onClick={() => handleReactionToggle(e.key)}
-              disabled={sendingReaction}
-              className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm transition-colors ${
-                isActive
-                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                  : "bg-muted hover:bg-muted/80 text-muted-foreground"
-              } disabled:opacity-50`}
-            >
-              <span>{e.label}</span>
-              {count > 0 && <span className="text-xs">{count}</span>}
-            </button>
-          );
-        })}
-      </div>
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCommentInput, setShowCommentInput] = useState(false);
 
-      {/* Comment Input */}
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="コメントを入力..."
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
+  // リアクションがあるかどうか
+  const hasReactions = Object.values(reactionCounts).some((count) => count > 0);
+
+  return (
+    <div className={`space-y-2 ${compact ? "pt-2 pl-6" : "pt-3 border-t"}`}>
+      {/* Reactions & Actions Row - コメントがない場合のみ表示 */}
+      {comments.length === 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Existing Reactions */}
+          {EMOJIS.filter((e) => reactionCounts[e.key] > 0).map((e) => {
+            const count = reactionCounts[e.key];
+            return (
+              <button
+                key={e.key}
+                onClick={() => handleReactionToggle(e.key)}
+                disabled={sendingReaction}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+              >
+                <span>{e.label}</span>
+                <span className="text-xs">{count}</span>
+              </button>
+            );
+          })}
+
+          {/* リアクション追加ボタン */}
+          <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+            <PopoverTrigger asChild>
+              <button
+                className="flex items-center justify-center w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+                title="リアクションを追加"
+              >
+                <SmilePlusIcon className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-2" align="start">
+              <div className="flex items-center gap-1">
+                {EMOJIS.map((e) => (
+                  <button
+                    key={e.key}
+                    onClick={() => {
+                      handleReactionToggle(e.key);
+                      setShowEmojiPicker(false);
+                    }}
+                    disabled={sendingReaction}
+                    className="p-1.5 rounded hover:bg-muted transition-colors text-lg disabled:opacity-50"
+                    title={e.key}
+                  >
+                    {e.label}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* コメントボタン（コメント入力が非表示の場合に表示） */}
+          {!showCommentInput && (
+            <button
+              onClick={() => setShowCommentInput(true)}
+              className="flex items-center justify-center w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+              title="コメントを追加"
+            >
+              <MessageCircleIcon className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Existing Reactions - コメントがある場合は上部に表示 */}
+      {comments.length > 0 && hasReactions && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {EMOJIS.filter((e) => reactionCounts[e.key] > 0).map((e) => {
+            const count = reactionCounts[e.key];
+            return (
+              <button
+                key={e.key}
+                onClick={() => handleReactionToggle(e.key)}
+                disabled={sendingReaction}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+              >
+                <span>{e.label}</span>
+                <span className="text-xs">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Comment Input - クリックで表示 */}
+      {showCommentInput && (
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="コメントを入力..."
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendComment();
+                setShowCommentInput(false);
+              }
+              if (e.key === "Escape") {
+                setShowCommentInput(false);
+                setNewComment("");
+              }
+            }}
+            disabled={sendingComment}
+            className="flex-1"
+            autoFocus
+          />
+          <Button
+            size="icon"
+            onClick={() => {
               handleSendComment();
-            }
-          }}
-          disabled={sendingComment}
-          className="flex-1"
-        />
-        <Button
-          size="icon"
-          onClick={handleSendComment}
-          disabled={!newComment.trim() || sendingComment}
-        >
-          <SendIcon className="h-4 w-4" />
-        </Button>
-      </div>
+              setShowCommentInput(false);
+            }}
+            disabled={!newComment.trim() || sendingComment}
+          >
+            <SendIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => {
+              setShowCommentInput(false);
+              setNewComment("");
+            }}
+          >
+            <XIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       {/* Comment List */}
       {comments.length > 0 && (
@@ -934,6 +1145,44 @@ function ReactionCommentSection({
               )}
             </div>
           ))}
+
+          {/* コメント一覧の下にリアクション・コメント追加ボタン */}
+          {!showCommentInput && (
+            <div className="flex items-center gap-1.5 pt-1">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className="flex items-center justify-center w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+                    title="リアクションを追加"
+                  >
+                    <SmilePlusIcon className="h-4 w-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="start">
+                  <div className="flex items-center gap-1">
+                    {EMOJIS.map((e) => (
+                      <button
+                        key={e.key}
+                        onClick={() => handleReactionToggle(e.key)}
+                        disabled={sendingReaction}
+                        className="p-1.5 rounded hover:bg-muted transition-colors text-lg disabled:opacity-50"
+                        title={e.key}
+                      >
+                        {e.label}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <button
+                onClick={() => setShowCommentInput(true)}
+                className="flex items-center justify-center w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+                title="コメントを追加"
+              >
+                <MessageCircleIcon className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -962,15 +1211,22 @@ function SessionSection({ session, isLast, apiToken }: { session: Session; isLas
   return (
     <div className={`${!isLast ? "border-b pb-4 mb-4" : ""}`}>
       <div className="space-y-3">
+        {/* Session Header with Reaction/Comment buttons */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            セッション{session.session_no}
+            {sessionTimeLabel && `（${sessionTimeLabel}）`}
+            {sessionWorkMinutes > 0 && ` ${formatMinutesToHours(sessionWorkMinutes)}`}
+          </span>
+          <ReactionCommentButtonsInline {...interactions} />
+        </div>
+
         {/* Memo */}
         {session.summary && (
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <MessageSquareIcon className="h-4 w-4 text-blue-500" />
               <span className="text-sm font-medium text-blue-500">本日のまとめ</span>
-              <span className="text-xs text-muted-foreground">セッション{session.session_no}</span>
-              {sessionTimeLabel && <span className="text-xs text-muted-foreground">（{sessionTimeLabel}）</span>}
-              {sessionWorkMinutes > 0 && <span className="text-xs text-muted-foreground">{formatMinutesToHours(sessionWorkMinutes)}</span>}
             </div>
             <p className="text-sm pl-6">
               {session.summary}
@@ -1019,8 +1275,98 @@ function SessionSection({ session, isLast, apiToken }: { session: Session; isLas
           </div>
         )}
 
-        {/* Reaction & Comment Section */}
-        <ReactionCommentSection {...interactions} compact />
+        {/* Comments */}
+        {interactions.comments.length > 0 && (
+          <div className="space-y-2 pl-6">
+            {interactions.comments.map((c) => (
+              <div key={c.id} className="bg-muted/50 rounded-md px-3 py-2 text-sm">
+                {interactions.editingCommentId === c.id ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={interactions.editingText}
+                      onChange={(e) => interactions.setEditingText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          interactions.handleSaveEdit(c.id);
+                        }
+                        if (e.key === "Escape") {
+                          interactions.handleCancelEdit();
+                        }
+                      }}
+                      className="text-sm"
+                      autoFocus
+                    />
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => interactions.handleSaveEdit(c.id)}
+                        disabled={!interactions.editingText.trim()}
+                        className="h-7 px-2"
+                      >
+                        <CheckIconLucide className="h-3 w-3 mr-1" />
+                        保存
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={interactions.handleCancelEdit}
+                        className="h-7 px-2"
+                      >
+                        <XIcon className="h-3 w-3 mr-1" />
+                        キャンセル
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <p>{c.text}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {format(new Date(c.created_at), "M/d HH:mm")}
+                        {c.source === "slack" && " (Slack)"}
+                      </p>
+                    </div>
+                    {c.source !== "slack" && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => interactions.handleStartEdit(c)}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          title="編集"
+                        >
+                          <PencilIcon className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => interactions.setDeleteConfirmId(c.id)}
+                          className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                          title="削除"
+                        >
+                          <TrashIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 削除確認ダイアログ */}
+        <Dialog open={!!interactions.deleteConfirmId} onOpenChange={(open) => !open && interactions.setDeleteConfirmId(null)}>
+          <DialogContent className="flex flex-col items-center text-center py-10">
+            <TrashIcon className="h-12 w-12 text-red-500 mb-4" />
+            <DialogHeader className="text-center">
+              <DialogTitle className="text-center">コメントの削除</DialogTitle>
+              <DialogDescription className="text-center">このコメントを削除しますか？</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-6 flex gap-2 justify-center">
+              <Button variant="outline" onClick={() => interactions.setDeleteConfirmId(null)}>キャンセル</Button>
+              <Button variant="destructive" onClick={() => interactions.deleteConfirmId && interactions.handleDeleteComment(interactions.deleteConfirmId)}>削除</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
