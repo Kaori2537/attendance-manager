@@ -240,10 +240,14 @@ export default function AdminDailyReportsClient({
       // 日モードに切り替え時は今日の日付を設定
       const now = new Date();
       params.set("date", format(now, "yyyy-MM-dd"));
+      // 日モードでは「ユーザーごと」が使えないので、選択中なら「全ユーザー」にリセット
+      if (filterUserId && filterUserId !== "by-user") {
+        params.set("userId", filterUserId);
+      }
     } else {
       params.set("view", "month");
+      if (filterUserId) params.set("userId", filterUserId);
     }
-    if (filterUserId) params.set("userId", filterUserId);
     router.push(`/admin/daily-reports?${params.toString()}`);
   };
 
@@ -395,14 +399,16 @@ export default function AdminDailyReportsClient({
           </div>
         </div>
 
-        {/* User Filter */}
+        {/* User Filter - 日ごとの場合は「ユーザーごと」を非表示 */}
         <Select value={filterUserId || "all"} onValueChange={handleUserChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="全ユーザー" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">全ユーザー（時系列）</SelectItem>
-            <SelectItem value="by-user">ユーザーごと</SelectItem>
+            <SelectItem value="all">全ユーザー</SelectItem>
+            {viewMode === "month" && (
+              <SelectItem value="by-user">ユーザーごと</SelectItem>
+            )}
             <div className="h-px bg-border my-1" />
             {users.map((u) => (
               <SelectItem key={u.id} value={u.id}>
@@ -714,96 +720,42 @@ function TimelineSessionCard({
 
           {/* Content */}
           <div className="space-y-3">
-            {/* セッションが1回の場合: 予定を表示、残りは折りたたみ */}
-            {isSingleSession ? (
-              <>
-                {/* Planned Tasks - 常に表示 */}
-                {plannedTasks.length > 0 && (
-                  <div className="space-y-1">
-                    <span className="text-sm font-medium">
-                      今日の予定（{formatMinutesToHours(totalPlannedMinutes)}）
-                    </span>
-                    <ul className="space-y-1 pl-1">
-                      {plannedTasks.map((task) => (
-                        <li key={task.id} className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2">
-                            <span className="text-muted-foreground">•</span>
-                            {task.title}
-                          </span>
-                          <span className="text-muted-foreground">
-                            {formatMinutesToHours(task.minutes)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+            {/* Planned Tasks - 常に表示 */}
+            {plannedTasks.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-sm font-medium">
+                  今日の予定（{formatMinutesToHours(totalPlannedMinutes)}）
+                </span>
+                <ul className="space-y-1 pl-1">
+                  {plannedTasks.map((task) => (
+                    <li key={task.id} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="text-muted-foreground">•</span>
+                        {task.title}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {formatMinutesToHours(task.minutes)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-                {/* 折りたたみトグル */}
-                {hasCollapsibleContent && (
-                  <button
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <ChevronDownIcon className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                    {isExpanded ? "折りたたむ" : "詳細を見る"}
-                  </button>
-                )}
+            {/* 折りたたみトグル */}
+            {hasCollapsibleContent && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ChevronDownIcon className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                {isExpanded ? "折りたたむ" : "詳細を見る"}
+              </button>
+            )}
 
-                {/* 折りたたみ内容 */}
-                {isExpanded && (
-                  <div className="space-y-3 pt-2 border-t">
-                    {/* Actual Tasks */}
-                    {actualTasks.length > 0 && (
-                      <div className="space-y-1">
-                        <span className="text-sm font-medium">
-                          今日の実績（{formatMinutesToHours(totalMinutes)}）
-                        </span>
-                        <ul className="space-y-1 pl-1">
-                          {actualTasks.map((task) => (
-                            <li key={task.id} className="flex items-center justify-between text-sm">
-                              <span className="flex items-center gap-2">
-                                <span className="text-muted-foreground">•</span>
-                                {task.title}
-                              </span>
-                              <span className="text-muted-foreground">
-                                {formatMinutesToHours(task.minutes)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Memo */}
-                    {session.summary && (
-                      <div className="space-y-1">
-                        <span className="text-sm font-medium">本日のまとめ</span>
-                        <p className="text-sm pl-1">{session.summary}</p>
-                      </div>
-                    )}
-
-                    {/* Trouble */}
-                    {session.troubles && (
-                      <div className="space-y-1">
-                        <span className="text-sm font-medium text-red-500">困っていること</span>
-                        <p className="text-sm pl-1 text-red-600">{session.troubles}</p>
-                      </div>
-                    )}
-
-                    {/* Announcements */}
-                    {session.announcements && (
-                      <div className="space-y-1">
-                        <span className="text-sm font-medium text-blue-500">周知事項</span>
-                        <p className="text-sm pl-1 text-blue-600">{session.announcements}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {/* セッションが複数の場合: 従来通り実績・まとめ・困りごとを表示 */}
+            {/* 折りたたみ内容 */}
+            {isExpanded && (
+              <div className="space-y-3 pt-2 border-t">
                 {/* Actual Tasks */}
                 {actualTasks.length > 0 && (
                   <div className="space-y-1">
@@ -841,7 +793,15 @@ function TimelineSessionCard({
                     <p className="text-sm pl-1 text-red-600">{session.troubles}</p>
                   </div>
                 )}
-              </>
+
+                {/* Announcements */}
+                {session.announcements && (
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium text-blue-500">周知事項</span>
+                    <p className="text-sm pl-1 text-blue-600">{session.announcements}</p>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Comments */}
