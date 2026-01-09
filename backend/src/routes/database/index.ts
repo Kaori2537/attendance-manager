@@ -26,6 +26,7 @@ import adminUsersRouter from "./admin/users";
 import adminDailyReportsRouter from "./admin/daily-reports";
 import dailyReportsCommentsRouter from "./daily-reports/comments";
 import dailyReportsAddSlackCommentRouter from "./daily-reports/add-slack-comment";
+import notificationsRouter from "./notifications";
 
 
 
@@ -62,5 +63,7 @@ database.route("/admin/daily-reports", adminDailyReportsRouter);
 database.route("/daily-reports/comments", dailyReportsCommentsRouter);
 database.route("/daily-reports/add-slack-comment", dailyReportsAddSlackCommentRouter);
 
+// notifications
+database.route("/notifications", notificationsRouter);
 
 export default database;

@@ -15,9 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Session } from "next-auth";
 import { signOut } from "next-auth/react";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // Headerコンポーネント
-export function Header({ currentUser }: { currentUser: Session["user"] | null }) {
+export function Header({ currentUser, apiToken }: { currentUser: Session["user"] | null; apiToken?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
@@ -85,6 +86,9 @@ export function Header({ currentUser }: { currentUser: Session["user"] | null })
 
         {/* ユーザー情報 */}
         <div className="hidden md:flex items-center gap-3 ml-4 border-l pl-4">
+          {/* 通知ベル */}
+          {apiToken && <NotificationBell apiToken={apiToken} />}
+
           <Avatar>
             <AvatarFallback className="bg-primary text-white">
               {getInitials(currentUser.name)}

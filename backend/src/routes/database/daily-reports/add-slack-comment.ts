@@ -99,6 +99,32 @@ route.post("/:sessionId/comments", async (c) => {
 
     if (insErr) return c.json({ ok: false, error: insErr.message }, 500);
 
+    // 4) 日報のユーザーに通知を作成
+    const { data: session } = await sb
+      .from("daily_report_sessions")
+      .select("daily_report_id")
+      .eq("id", sessionId)
+      .single();
+
+    if (session?.daily_report_id) {
+      const { data: report } = await sb
+        .from("daily_reports")
+        .select("user_id, report_date")
+        .eq("id", session.daily_report_id)
+        .single();
+
+      if (report?.user_id && report.user_id !== payload.id) {
+        // コメント投稿者と日報の所有者が異なる場合のみ通知
+        await sb.from("notifications").insert({
+          user_id: report.user_id,
+          type: "comment",
+          title: "日報にコメントがつきました",
+          message: text.length > 50 ? text.slice(0, 50) + "..." : text,
+          link: `/daily-reports?date=${report.report_date}`,
+        });
+      }
+    }
+
     return c.json({ ok: true, slackTs: commentTs, commentId: insertedComment?.id });
   } catch (e: any) {
     console.error("[add-slack-comment] error:", e);

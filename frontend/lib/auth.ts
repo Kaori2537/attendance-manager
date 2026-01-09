@@ -7,3 +7,8 @@ export async function getCurrentUser(): Promise<User | null> {
     const session = await getServerSession(authOptions)
     return session?.user ?? null
 }
+
+export async function getCurrentSession() {
+    const session = await getServerSession(authOptions)
+    return session
+}

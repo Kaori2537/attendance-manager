@@ -2,7 +2,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Providers } from "./providers";
@@ -21,13 +21,15 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  const session = await getCurrentSession();
+  const user = session?.user ?? null;
+  const apiToken = (user as any)?.apiToken;
 
   return (
     <html lang="ja">
       <body className={`min-h-screen bg-background ${geistSans.variable} ${geistMono.variable}`}>
         <Providers>
-          <Header currentUser={user} />
+          <Header currentUser={user} apiToken={apiToken} />
           <main className="container mx-auto p-6 max-w-7xl">{children}</main>
           {/* ✅ toast を表示する土台 */}
           <Toaster />

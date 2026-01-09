@@ -130,6 +130,41 @@ export default new Hono<{ Bindings: Env }>()
       return c.json({ ok: false, error: `daily_report_reactions insert: ${ins.error.message}` }, 500);
     }
 
+    // 日報のユーザーに通知を作成
+    const { data: session } = await sb
+      .from("daily_report_sessions")
+      .select("daily_report_id")
+      .eq("id", sessionId)
+      .single();
+
+    if (session?.daily_report_id) {
+      const { data: report } = await sb
+        .from("daily_reports")
+        .select("user_id, report_date")
+        .eq("id", session.daily_report_id)
+        .single();
+
+      if (report?.user_id && report.user_id !== guard.payload.id) {
+        // リアクション投稿者と日報の所有者が異なる場合のみ通知
+        const emojiMap: Record<string, string> = {
+          "+1": "👍",
+          "tada": "🎉",
+          "clap": "👏",
+          "white_check_mark": "✅",
+          "pray": "🙏",
+          "eyes": "👀",
+        };
+        const emojiLabel = emojiMap[emoji] ?? emoji;
+        await sb.from("notifications").insert({
+          user_id: report.user_id,
+          type: "reaction",
+          title: "日報にリアクションがつきました",
+          message: emojiLabel,
+          link: `/daily-reports?date=${report.report_date}`,
+        });
+      }
+    }
+
     return c.json({ ok: true, sessionId, kind, emoji });
   })
   .delete("/:sessionId/reactions", async (c) => {
