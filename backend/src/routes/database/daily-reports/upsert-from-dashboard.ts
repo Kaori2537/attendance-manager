@@ -13,7 +13,7 @@ type DashboardTask = {
 
 type Body = {
   date: string; // YYYY-MM-DD
-  mode: "checkin" | "checkout";
+  mode: "checkin" | "checkout" | "resume";
   plannedTasks?: DashboardTask[];
   actualTasks?: DashboardTask[];
   summary?: string | null;
@@ -64,7 +64,7 @@ function nowTimeJp() {
   return now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 }
 
-// session_id + kind を“入れ替え”する（delete→insert）
+// session_id + kind を"入れ替え"する（delete→insert）
 async function replaceTasks(
   sb: any,
   sessionId: string,
@@ -88,6 +88,44 @@ async function replaceTasks(
       title: toTitle(t),
       minutes: toMinutes(t),
       sort_order: idx,
+    }))
+    .filter((r) => r.title && r.minutes > 0);
+
+  if (rows.length === 0) return;
+
+  const ins = await sb.from("daily_report_tasks").insert(rows);
+  if (ins.error) throw new Error(`tasks insert: ${ins.error.message}`);
+}
+
+// 既存のタスクに追加する（resume用）
+async function appendTasks(
+  sb: any,
+  sessionId: string,
+  kind: "planned" | "actual",
+  tasks: DashboardTask[]
+) {
+  if (!tasks?.length) return;
+
+  // 現在の最大sort_orderを取得
+  const { data: existing, error: selectErr } = await sb
+    .from("daily_report_tasks")
+    .select("sort_order")
+    .eq("session_id", sessionId)
+    .eq("kind", kind)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  if (selectErr) throw new Error(`tasks select: ${selectErr.message}`);
+
+  const maxSortOrder = existing?.[0]?.sort_order ?? -1;
+
+  const rows = tasks
+    .map((t, idx) => ({
+      session_id: sessionId,
+      kind,
+      title: toTitle(t),
+      minutes: toMinutes(t),
+      sort_order: maxSortOrder + 1 + idx,
     }))
     .filter((r) => r.title && r.minutes > 0);
 
@@ -198,7 +236,35 @@ async function postSlackMessage(c: any, params: { text: string; userName?: strin
   return { channelId: channel, messageTs: slackRes.ts };
 }
 
-type SlackLinkKind = "clock_in" | "clock_out";
+/**
+ * Slackメッセージを編集する
+ */
+async function updateSlackMessage(c: any, params: { channelId: string; messageTs: string; text: string }) {
+  const token = c.env.SLACK_BOT_TOKEN;
+
+  if (!token) throw new Error("Missing env: SLACK_BOT_TOKEN");
+
+  const res = await fetch("https://slack.com/api/chat.update", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      channel: params.channelId,
+      ts: params.messageTs,
+      text: params.text,
+    }),
+  });
+
+  const slackRes = (await res.json()) as SlackPostMessageResponse;
+  if (!slackRes.ok) {
+    throw new Error(`Slack chat.update failed: ${slackRes.error ?? "unknown"}`);
+  }
+  return { ok: true };
+}
+
+type SlackLinkKind = "clock_in" | "clock_out" | "resume";
 
 /**
  * ✅ kind を保存して「出勤/退勤で別メッセージTS」を持つ
@@ -250,8 +316,8 @@ route.post("/", async (c) => {
     if (!body?.date || !isValidDate(body.date)) {
       return c.json({ ok: false, error: "date is required (YYYY-MM-DD)" }, 400);
     }
-    if (body.mode !== "checkin" && body.mode !== "checkout") {
-      return c.json({ ok: false, error: "mode must be checkin | checkout" }, 400);
+    if (body.mode !== "checkin" && body.mode !== "checkout" && body.mode !== "resume") {
+      return c.json({ ok: false, error: "mode must be checkin | checkout | resume" }, 400);
     }
 
     const sessionNo = clampSessionNo(body.sessionNo);
@@ -277,37 +343,107 @@ route.post("/", async (c) => {
     // 3) tasks reflect
     if (body.mode === "checkin") {
       await replaceTasks(sb, session.id, "planned", body.plannedTasks ?? []);
-    } else {
+    } else if (body.mode === "checkout") {
       await replaceTasks(sb, session.id, "actual", body.actualTasks ?? []);
+    } else if (body.mode === "resume") {
+      // resume: 既存のplannedTasksに追加する
+      if (body.plannedTasks?.length) {
+        await appendTasks(sb, session.id, "planned", body.plannedTasks);
+      }
     }
 
     // 4) Slack post (optional) -> slack_links save (kind分岐)
     const shouldPost = body.postToSlack !== false; // default true
-    if (shouldPost) {
+    // resume でタスク追加がない場合はSlack投稿しない
+    const hasResumeContent = body.mode === "resume" && body.plannedTasks?.length;
+    if (shouldPost && (body.mode !== "resume" || hasResumeContent)) {
       const time = nowTimeJp();
       const userName = body.userName ?? "（ユーザー）";
 
-      const text =
-        body.mode === "checkin"
-          ? `${time}\n*${userName} さん（セッション${sessionNo}）が勤務開始しました！*\n\n*本日の予定*\n${tasksToText(
+      if (body.mode === "checkin") {
+        // 出勤時：新規投稿
+        const text = `${time}\n*${userName} さんが勤務開始しました！*\n\n*本日の予定*\n${tasksToText(
+          body.plannedTasks ?? []
+        )}`;
+        const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+        await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "clock_in" });
+      } else if (body.mode === "resume") {
+        // 休憩終了時：出勤メッセージを編集（全タスクを含める）
+        // 1. clock_inのSlackリンクを取得
+        const { data: clockInLink, error: linkErr } = await sb
+          .from("daily_report_slack_links")
+          .select("channel_id, message_ts")
+          .eq("daily_report_session_id", session.id)
+          .eq("kind", "clock_in")
+          .maybeSingle();
+
+        if (linkErr) {
+          console.error("Failed to get clock_in slack link:", linkErr);
+        }
+
+        if (clockInLink?.channel_id && clockInLink?.message_ts) {
+          // 2. DBから全plannedTasksを取得
+          const { data: allTasks, error: tasksErr } = await sb
+            .from("daily_report_tasks")
+            .select("title, minutes")
+            .eq("session_id", session.id)
+            .eq("kind", "planned")
+            .order("sort_order", { ascending: true });
+
+          if (tasksErr) {
+            console.error("Failed to get all planned tasks:", tasksErr);
+          }
+
+          // 3. タスクをテキスト形式に変換
+          const allTasksText = (allTasks ?? [])
+            .map((t: { title: string; minutes: number }) => {
+              const h = t.minutes > 0 ? `${(t.minutes / 60).toFixed(1)}h` : "";
+              return `• ${t.title}${h ? `（${h}）` : ""}`;
+            })
+            .join("\n") || "（なし）";
+
+          // 4. メッセージを編集
+          const updatedText = `${time}\n*${userName} さんが勤務開始しました！*\n\n*本日の予定*\n${allTasksText}`;
+
+          try {
+            await updateSlackMessage(c, {
+              channelId: clockInLink.channel_id,
+              messageTs: clockInLink.message_ts,
+              text: updatedText,
+            });
+          } catch (e) {
+            console.error("Failed to update Slack message:", e);
+            // 編集に失敗した場合は新規投稿にフォールバック
+            const text = `${time}\n*${userName} さんが勤務再開しました！*\n\n*追加タスク*\n${tasksToText(
               body.plannedTasks ?? []
-            )}`
-          : `${time}\n*${userName} さん（セッション${sessionNo}）が勤務終了しました！*\n\n*今日やったこと*\n${tasksToText(
-              body.actualTasks ?? []
-            )}${
-              body.summary?.trim() ? `\n\n*まとめ*\n${body.summary.trim()}` : ""
-            }${
-              body.troubles?.trim() ? `\n\n*困っていること*\n${body.troubles.trim()}` : ""
-            }${
-              body.announcements?.trim()
-                ? `\n\n*連絡事項*\n${body.announcements.trim()}`
-                : ""
-            }`;
-
-      const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
-
-      const kind: SlackLinkKind = body.mode === "checkin" ? "clock_in" : "clock_out";
-      await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind });
+            )}`;
+            const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+            await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "resume" });
+          }
+        } else {
+          // clock_inリンクがない場合は新規投稿
+          const text = `${time}\n*${userName} さんが勤務再開しました！*\n\n*追加タスク*\n${tasksToText(
+            body.plannedTasks ?? []
+          )}`;
+          const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+          await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "resume" });
+        }
+      } else {
+        // 退勤時：新規投稿
+        const text = `${time}\n*${userName} さんが勤務終了しました！*\n\n*今日やったこと*\n${tasksToText(
+          body.actualTasks ?? []
+        )}${
+          body.summary?.trim() ? `\n\n*まとめ*\n${body.summary.trim()}` : ""
+        }${
+          body.troubles?.trim() ? `\n\n*困っていること*\n${body.troubles.trim()}` : ""
+        }${
+          body.announcements?.trim()
+            ? `\n\n*連絡事項*\n${body.announcements.trim()}`
+            : ""
+        }`;
+        const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+        await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "clock_out" });
+      }
     }
 
     return c.json({ ok: true, reportId: report.id, sessionId: session.id, sessionNo });

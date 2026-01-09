@@ -65,7 +65,39 @@ attendanceClockInRouter.post('/', async (c) => {
         attendanceId = newRecord.id;
     }
 
-    // 2. 新しい work_session を clock_in = now() で作成
+    // 2. 今日のセッションが既に存在するか確認（1日1セッション制限）
+    const { data: existingSession, error: existingSessionErr } = await supabase
+        .from('work_sessions')
+        .select('id, clock_out')
+        .eq('attendance_id', attendanceId)
+        .maybeSingle();
+
+    if (existingSessionErr) {
+        console.error(existingSessionErr);
+        return c.json({ error: existingSessionErr.message }, 500);
+    }
+
+    // 既にセッションがある場合
+    if (existingSession) {
+        // まだ出勤中（clock_out が null）の場合はエラー
+        if (!existingSession.clock_out) {
+            return c.json({ error: 'Already clocked in' }, 400);
+        }
+        // 退勤済みの場合は clock_out を null にして再開
+        const { error: reopenErr } = await supabase
+            .from('work_sessions')
+            .update({ clock_out: null })
+            .eq('id', existingSession.id);
+
+        if (reopenErr) {
+            console.error(reopenErr);
+            return c.json({ error: reopenErr.message }, 500);
+        }
+
+        return c.json({ success: true, reopened: true });
+    }
+
+    // 3. セッションが無ければ新しい work_session を clock_in = now() で作成
     const { error: sessionErr } = await supabase
         .from('work_sessions')
         .insert({

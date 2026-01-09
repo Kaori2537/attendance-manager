@@ -133,27 +133,19 @@ export default async function Page({
 
   const sessions = normalizeSessions(data.sessions ?? []);
 
-  // UI側でも 1..3 を保証
-  const map = new Map<number, UiSession>();
-  for (const s of sessions) map.set(s.sessionNo, s);
-
-  const sessions123: UiSession[] = [1, 2, 3].map((no) => {
-    const existing = map.get(no);
-    return (
-      existing ?? {
-        id: "",
-        sessionNo: no,
-        plannedMinutes: 0,
-        actualMinutes: 0,
-        summary: null,
-        troubles: null,
-        announcements: null,
-        plannedTasks: [],
-        actualTasks: [],
-        reactions: {}, // ✅ 追加
-      }
-    );
-  });
+  // 1日1セッション制限：session_no=1 のみ使用
+  const session1 = sessions.find((s) => s.sessionNo === 1) ?? {
+    id: "",
+    sessionNo: 1,
+    plannedMinutes: 0,
+    actualMinutes: 0,
+    summary: null,
+    troubles: null,
+    announcements: null,
+    plannedTasks: [],
+    actualTasks: [],
+    reactions: {},
+  };
 
   const selectedDate = new Date(`${date}T00:00:00`);
 
@@ -166,76 +158,72 @@ export default async function Page({
           <p className="text-muted-foreground mt-4">{date}</p>
         </header>
 
-        <div className="space-y-6">
-          {sessions123.map((s) => (
-            <section key={s.sessionNo} className="rounded-xl border p-4 space-y-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className="font-semibold">Session {s.sessionNo}</h2>
-                <div className="text-sm text-muted-foreground tabular-nums">
-                  Planned {minutesToHoursText(s.plannedMinutes)} · Actual{" "}
-                  {minutesToHoursText(s.actualMinutes)}
-                </div>
-              </div>
+        <section className="rounded-xl border p-4 space-y-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="font-semibold">本日の記録</h2>
+            <div className="text-sm text-muted-foreground tabular-nums">
+              予定 {minutesToHoursText(session1.plannedMinutes)} · 実績{" "}
+              {minutesToHoursText(session1.actualMinutes)}
+            </div>
+          </div>
 
-              {/* メモ編集 + 保存 */}
-              {s.id ? (
-                <>
-                  <SessionMemoEditor
-                    sessionId={s.id}
-                    summary={s.summary}
-                    troubles={s.troubles}
-                    announcements={s.announcements}
-                  />
+          {/* メモ編集 + 保存 */}
+          {session1.id ? (
+            <>
+              <SessionMemoEditor
+                sessionId={session1.id}
+                summary={session1.summary}
+                troubles={session1.troubles}
+                announcements={session1.announcements}
+              />
 
-                  {/* ✅ Slack由来リアクション（表示のみ） */}
-                  <ReactionSummary reactions={s.reactions} />
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">Session ID が取得できませんでした</p>
-              )}
+              {/* Slack由来リアクション（表示のみ） */}
+              <ReactionSummary reactions={session1.reactions} />
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">データがありません</p>
+          )}
 
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Planned</p>
-                {s.plannedTasks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No planned tasks</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {s.plannedTasks.map((t) => (
-                      <li key={t.id} className="flex justify-between gap-4">
-                        <span className="text-sm">{t.title}</span>
-                        <span className="text-sm tabular-nums text-muted-foreground">
-                          {minutesToHoursText(t.minutes)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">予定タスク</p>
+            {session1.plannedTasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">予定タスクなし</p>
+            ) : (
+              <ul className="space-y-2">
+                {session1.plannedTasks.map((t: UiTask) => (
+                  <li key={t.id} className="flex justify-between gap-4">
+                    <span className="text-sm">{t.title}</span>
+                    <span className="text-sm tabular-nums text-muted-foreground">
+                      {minutesToHoursText(t.minutes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Actual</p>
-                {s.actualTasks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No actual tasks</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {s.actualTasks.map((t) => (
-                      <li key={t.id} className="flex justify-between gap-4">
-                        <span className="text-sm">{t.title}</span>
-                        <span className="text-sm tabular-nums text-muted-foreground">
-                          {minutesToHoursText(t.minutes)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </section>
-          ))}
-        </div>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">実績タスク</p>
+            {session1.actualTasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">実績タスクなし</p>
+            ) : (
+              <ul className="space-y-2">
+                {session1.actualTasks.map((t: UiTask) => (
+                  <li key={t.id} className="flex justify-between gap-4">
+                    <span className="text-sm">{t.title}</span>
+                    <span className="text-sm tabular-nums text-muted-foreground">
+                      {minutesToHoursText(t.minutes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
       </div>
 
       {/* 右：Summary */}
-      <DailyReportSummaryCard selectedDate={selectedDate} selectedYmd={date} sessions={sessions123} />
+      <DailyReportSummaryCard selectedDate={selectedDate} selectedYmd={date} sessions={[session1]} />
     </div>
   );
 }

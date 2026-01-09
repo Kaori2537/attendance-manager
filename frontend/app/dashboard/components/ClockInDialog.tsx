@@ -67,7 +67,7 @@ export const ClockInDialog = ({ open, onClose, onSubmit }: { open: boolean; onCl
 
                 <div className="space-y-4 py-4">
                     <div>
-                        <Label className="text-base">実施予定タスクと予定工数（時間）</Label>
+                        <Label className="text-base">実施予定タスクと予定工数</Label>
                         <div className="space-y-3 mt-3">
                             {plannedTasks.map((task, index) => (
                                 <div key={index} className="flex gap-2 items-start">
@@ -82,16 +82,20 @@ export const ClockInDialog = ({ open, onClose, onSubmit }: { open: boolean; onCl
                                             }}
                                         />
                                     </div>
-                                    <div className="w-32">
-                                        <Input
-                                            placeholder="1時間"
-                                            value={task.hours}
-                                            onChange={(e) => {
-                                                const newList = [...plannedTasks];
-                                                newList[index].hours = e.target.value;
-                                                setPlannedTasks(newList);
-                                            }}
-                                        />
+                                    <div className="w-24">
+                                        <div className="relative">
+                                            <Input
+                                                placeholder="1"
+                                                value={task.hours}
+                                                onChange={(e) => {
+                                                    const newList = [...plannedTasks];
+                                                    newList[index].hours = e.target.value;
+                                                    setPlannedTasks(newList);
+                                                }}
+                                                className="pr-8"
+                                            />
+                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">h</span>
+                                        </div>
                                     </div>
                                     {plannedTasks.length > 1 && (
                                         <Button

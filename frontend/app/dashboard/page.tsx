@@ -38,7 +38,6 @@ export default function Page() {
   } = useClockDialogs();
 
   const isWorking = currentSession !== null;
-  const sessionCount = attendance?.sessions?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -51,7 +50,6 @@ export default function Page() {
         onBreakEnd={openBreakEnd}
         onBreak={onBreak}
         isWorking={isWorking}
-        sessionCount={sessionCount}
       />
 
       <SummaryCard attendance={attendance} />
@@ -67,7 +65,7 @@ export default function Page() {
       {/* dialogs */}
       <ClockInDialog open={showClockInDialog} onClose={closeDialogs} onSubmit={handleClockIn} />
 
-      <ClockOutDialog open={showClockOutDialog} onClose={closeDialogs} onSubmit={handleClockOut} sessionNo={sessionCount || 1} />
+      <ClockOutDialog open={showClockOutDialog} onClose={closeDialogs} onSubmit={handleClockOut} sessionNo={1} />
 
       <BreakDialog
         open={showBreakDialog}

@@ -6,7 +6,7 @@ import { AttendanceRecord, WorkSession, Task } from "../../../../shared/types/At
 import { clockInWithTasks } from "@/app/actions/clock-in";
 import { clockOutWithTasks } from "@/app/actions/clock-out";
 import { breakStart } from "@/app/actions/break-start";
-import { breakEnd } from "@/app/actions/break-end";
+import { resumeWorkWithTasks } from "@/app/actions/resume-work";
 
 // セッション検出（出勤中かどうか）
 function detectCurrentSession(attendance: AttendanceRecord | null): WorkSession | null {
@@ -22,36 +22,9 @@ function detectOnBreak(currentSession: WorkSession | null): boolean {
   return !lastBreak.end;
 }
 
-function clampSessionNo(n: number) {
-  if (!Number.isFinite(n) || n <= 0) return 1;
-  return Math.min(3, Math.max(1, Math.trunc(n)));
-}
-
-/**
- * 次の clock-in が入る sessionNo
- * - sessions が0 → 1
- * - 最後が open（clockOut なし）→ そのまま（=すでに出勤中なので本来押せないが保険）
- * - 最後が closed → count+1
- */
-function nextSessionNoForClockIn(attendance: AttendanceRecord | null) {
-  const count = attendance?.sessions?.length ?? 0;
-  const current = detectCurrentSession(attendance);
-  if (count === 0) return 1;
-  if (current) return count; // open があるならそれ
-  return count + 1;
-}
-
-/**
- * clock-out が入る sessionNo（open セッションの番号）
- * - open がある → sessions.length
- * - open がない → sessions.length（保険。UI的には押せない想定）
- */
-function currentSessionNoForClockOut(attendance: AttendanceRecord | null) {
-  const count = attendance?.sessions?.length ?? 0;
-  const current = detectCurrentSession(attendance);
-  if (count === 0) return 1;
-  if (current) return count;
-  return count;
+// 1日1セッション制限のため、常にセッション番号は1
+function getSessionNo() {
+  return 1;
 }
 
 export function useAttendance() {
@@ -82,7 +55,7 @@ export function useAttendance() {
 
   // 出勤
   const handleClockIn = async (plannedTasks: Task[]) => {
-    const sessionNo = clampSessionNo(nextSessionNoForClockIn(attendance));
+    const sessionNo = getSessionNo();
     const res = await clockInWithTasks(plannedTasks, sessionNo);
     await loadAll();
 
@@ -93,7 +66,7 @@ export function useAttendance() {
 
   // 退勤
   const handleClockOut = async (actualTasks: Task[], summary: string, issues: string, notes: string) => {
-    const sessionNo = clampSessionNo(currentSessionNoForClockOut(attendance));
+    const sessionNo = getSessionNo();
     const res = await clockOutWithTasks(actualTasks, summary, issues, notes, sessionNo);
     await loadAll();
 
@@ -112,9 +85,9 @@ export function useAttendance() {
     }
   };
 
-  // 休憩終了
-  const handleBreakEnd = async () => {
-    const res = await breakEnd();
+  // 休憩終了（タスク追加対応）
+  const handleBreakEnd = async (additionalTasks: Task[]) => {
+    const res = await resumeWorkWithTasks(additionalTasks);
     await loadAll();
 
     if (!res.success) {

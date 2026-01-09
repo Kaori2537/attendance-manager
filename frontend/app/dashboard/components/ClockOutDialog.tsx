@@ -55,7 +55,7 @@ export const ClockOutDialog = ({ open, onClose, onSubmit, sessionNo }: { open: b
                 // plannedTasksをactualTasksの形式に変換
                 const converted = targetSession.plannedTasks.map((t: PlannedTask) => ({
                     task: t.title,
-                    hours: `${t.minutes / 60}時間`, // 分を時間に変換して「時間」を付与
+                    hours: `${t.minutes / 60}`, // 分を時間に変換
                 }));
 
                 setActualTasks(converted);
@@ -135,7 +135,7 @@ export const ClockOutDialog = ({ open, onClose, onSubmit, sessionNo }: { open: b
 
                 <div className="space-y-4 py-4">
                     <div>
-                        <Label className="text-base">実施タスクと実工数（時間）</Label>
+                        <Label className="text-base">実施タスクと実工数</Label>
                         <div className="space-y-3 mt-3">
                             {actualTasks.map((task, index) => (
                                 <div key={index} className="flex gap-2 items-start">
@@ -150,16 +150,20 @@ export const ClockOutDialog = ({ open, onClose, onSubmit, sessionNo }: { open: b
                                             }}
                                         />
                                     </div>
-                                    <div className="w-32">
-                                        <Input
-                                            placeholder="1時間"
-                                            value={task.hours}
-                                            onChange={(e) => {
-                                                const newList = [...actualTasks];
-                                                newList[index].hours = e.target.value;
-                                                setActualTasks(newList);
-                                            }}
-                                        />
+                                    <div className="w-24">
+                                        <div className="relative">
+                                            <Input
+                                                placeholder="1"
+                                                value={task.hours}
+                                                onChange={(e) => {
+                                                    const newList = [...actualTasks];
+                                                    newList[index].hours = e.target.value;
+                                                    setActualTasks(newList);
+                                                }}
+                                                className="pr-8"
+                                            />
+                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">h</span>
+                                        </div>
                                     </div>
                                     {actualTasks.length > 1 && (
                                         <Button
