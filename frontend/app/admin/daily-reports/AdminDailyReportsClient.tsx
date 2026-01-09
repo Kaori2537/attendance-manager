@@ -8,6 +8,7 @@ import {
   CalendarIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
   MessageSquareIcon,
   CheckIcon,
   AlertCircleIcon,
@@ -113,6 +114,7 @@ type FlatSession = Session & {
   userEmail: string;
   reportDate: string;
   reportId: string;
+  sessionCount: number;
 };
 
 // 固定の6種類の絵文字（仕様通り）
@@ -300,6 +302,7 @@ export default function AdminDailyReportsClient({
               userEmail: user.email,
               reportDate: report.reportDate,
               reportId: report.id,
+              sessionCount: report.sessionCount,
             }))
         )
     )
@@ -479,6 +482,7 @@ export default function AdminDailyReportsClient({
                       userEmail: user.email,
                       reportDate: report.reportDate,
                       reportId: report.id,
+                      sessionCount: report.sessionCount,
                     }))
                 )
             )
@@ -635,8 +639,13 @@ function TimelineSessionCard({
   apiToken: string;
   showDate?: boolean;
 }) {
+  const plannedTasks = session.tasks.filter((t) => t.kind === "planned");
   const actualTasks = session.tasks.filter((t) => t.kind === "actual");
   const totalMinutes = actualTasks.reduce((sum, t) => sum + t.minutes, 0);
+  const totalPlannedMinutes = plannedTasks.reduce((sum, t) => sum + t.minutes, 0);
+
+  // セッションが1回だけかどうか
+  const isSingleSession = session.sessionCount === 1;
 
   // セッションの出退勤時間を表示
   const sessionTimeLabel = session.clock_in
@@ -657,6 +666,11 @@ function TimelineSessionCard({
 
   // 詳細ダイアログ
   const [dialogOpen, setDialogOpen] = useState(false);
+  // 折りたたみ状態（セッション1回の場合のみ使用）
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // 折りたたみ内に表示するコンテンツがあるか
+  const hasCollapsibleContent = actualTasks.length > 0 || session.summary || session.troubles || session.announcements;
 
   return (
     <>
@@ -673,9 +687,16 @@ function TimelineSessionCard({
         <div className="flex-1 min-w-0">
           {/* セッションヘッダー */}
           <div className="flex items-center gap-3 mb-3 h-8">
-            <span className="text-sm text-muted-foreground">
-              セッション{session.session_no}（{sessionTimeLabel ?? "--:--"}）{sessionWorkMinutes > 0 && ` ${formatMinutesToHours(sessionWorkMinutes)}`}
-            </span>
+            {/* セッションが1回の場合は「セッション1」を非表示、時間のみ表示 */}
+            {isSingleSession ? (
+              <span className="text-sm text-muted-foreground">
+                {sessionTimeLabel ?? "--:--"}{sessionWorkMinutes > 0 && `（${formatMinutesToHours(sessionWorkMinutes)}）`}
+              </span>
+            ) : (
+              <span className="text-sm text-muted-foreground">
+                セッション{session.session_no}（{sessionTimeLabel ?? "--:--"}）{sessionWorkMinutes > 0 && `（${formatMinutesToHours(sessionWorkMinutes)}）`}
+              </span>
+            )}
             {showDate && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CalendarIcon className="h-4 w-4" />
@@ -684,49 +705,143 @@ function TimelineSessionCard({
             )}
             <div className="flex-1" />
             <ReactionCommentButtonsInline {...interactions} />
-            <Button variant="ghost" size="icon" onClick={() => setDialogOpen(true)}>
-              <EyeIcon className="h-5 w-5" />
-            </Button>
+            {!isSingleSession && (
+              <Button variant="ghost" size="icon" onClick={() => setDialogOpen(true)}>
+                <EyeIcon className="h-5 w-5" />
+              </Button>
+            )}
           </div>
 
           {/* Content */}
           <div className="space-y-3">
-            {/* Actual Tasks */}
-            {actualTasks.length > 0 && (
-              <div className="space-y-1">
-                <span className="text-sm font-medium">
-                  今日の実績（{formatMinutesToHours(totalMinutes)}）
-                </span>
-                <ul className="space-y-1 pl-1">
-                  {actualTasks.map((task) => (
-                    <li key={task.id} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <span className="text-muted-foreground">•</span>
-                        {task.title}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {formatMinutesToHours(task.minutes)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {/* セッションが1回の場合: 予定を表示、残りは折りたたみ */}
+            {isSingleSession ? (
+              <>
+                {/* Planned Tasks - 常に表示 */}
+                {plannedTasks.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium">
+                      今日の予定（{formatMinutesToHours(totalPlannedMinutes)}）
+                    </span>
+                    <ul className="space-y-1 pl-1">
+                      {plannedTasks.map((task) => (
+                        <li key={task.id} className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2">
+                            <span className="text-muted-foreground">•</span>
+                            {task.title}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {formatMinutesToHours(task.minutes)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-            {/* Memo */}
-            {session.summary && (
-              <div className="space-y-1">
-                <span className="text-sm font-medium">本日のまとめ</span>
-                <p className="text-sm pl-1">{session.summary}</p>
-              </div>
-            )}
+                {/* 折りたたみトグル */}
+                {hasCollapsibleContent && (
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ChevronDownIcon className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                    {isExpanded ? "折りたたむ" : "詳細を見る"}
+                  </button>
+                )}
 
-            {/* Trouble */}
-            {session.troubles && (
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-red-500">困っていること</span>
-                <p className="text-sm pl-1 text-red-600">{session.troubles}</p>
-              </div>
+                {/* 折りたたみ内容 */}
+                {isExpanded && (
+                  <div className="space-y-3 pt-2 border-t">
+                    {/* Actual Tasks */}
+                    {actualTasks.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-sm font-medium">
+                          今日の実績（{formatMinutesToHours(totalMinutes)}）
+                        </span>
+                        <ul className="space-y-1 pl-1">
+                          {actualTasks.map((task) => (
+                            <li key={task.id} className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2">
+                                <span className="text-muted-foreground">•</span>
+                                {task.title}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {formatMinutesToHours(task.minutes)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Memo */}
+                    {session.summary && (
+                      <div className="space-y-1">
+                        <span className="text-sm font-medium">本日のまとめ</span>
+                        <p className="text-sm pl-1">{session.summary}</p>
+                      </div>
+                    )}
+
+                    {/* Trouble */}
+                    {session.troubles && (
+                      <div className="space-y-1">
+                        <span className="text-sm font-medium text-red-500">困っていること</span>
+                        <p className="text-sm pl-1 text-red-600">{session.troubles}</p>
+                      </div>
+                    )}
+
+                    {/* Announcements */}
+                    {session.announcements && (
+                      <div className="space-y-1">
+                        <span className="text-sm font-medium text-blue-500">周知事項</span>
+                        <p className="text-sm pl-1 text-blue-600">{session.announcements}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* セッションが複数の場合: 従来通り実績・まとめ・困りごとを表示 */}
+                {/* Actual Tasks */}
+                {actualTasks.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium">
+                      今日の実績（{formatMinutesToHours(totalMinutes)}）
+                    </span>
+                    <ul className="space-y-1 pl-1">
+                      {actualTasks.map((task) => (
+                        <li key={task.id} className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2">
+                            <span className="text-muted-foreground">•</span>
+                            {task.title}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {formatMinutesToHours(task.minutes)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Memo */}
+                {session.summary && (
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium">本日のまとめ</span>
+                    <p className="text-sm pl-1">{session.summary}</p>
+                  </div>
+                )}
+
+                {/* Trouble */}
+                {session.troubles && (
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium text-red-500">困っていること</span>
+                    <p className="text-sm pl-1 text-red-600">{session.troubles}</p>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Comments */}
