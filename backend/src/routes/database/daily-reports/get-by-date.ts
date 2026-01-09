@@ -244,9 +244,43 @@ route.get("/", async (c) => {
         (reactionsBySession[sid][r.emoji] ?? 0) + 1;
     }
 
+    // ✅ 3.6) comments（コメントを session ごとに取得）
+    let commentRows: any[] = [];
+    if (reactionSessionIds.length > 0) {
+      const cc = await sb
+        .from("daily_report_comments")
+        .select("id, daily_report_session_id, user_id, text, source, created_at")
+        .in("daily_report_session_id", reactionSessionIds)
+        .order("created_at", { ascending: true });
+
+      if (cc.error) {
+        console.error("daily_report_comments select error:", cc.error);
+        return c.json(
+          { ok: false, error: cc.error.message, detail: cc.error },
+          500
+        );
+      }
+
+      commentRows = cc.data ?? [];
+    }
+
+    const commentsBySession: Record<string, any[]> = {};
+    for (const cm of commentRows) {
+      const sid = cm.daily_report_session_id;
+      if (!commentsBySession[sid]) commentsBySession[sid] = [];
+      commentsBySession[sid].push({
+        id: cm.id,
+        userId: cm.user_id,
+        text: cm.text,
+        source: cm.source,
+        createdAt: cm.created_at,
+      });
+    }
+
     const sessionsWithTasksAndReactions = sessionsWithTasks.map((s: any) => ({
       ...s,
       reactions: reactionsBySession[s.id] ?? {},
+      comments: commentsBySession[s.id] ?? [],
     }));
 
     // 4) attendance（勤怠）を取得して組み立て（複数work_sessions対応）
