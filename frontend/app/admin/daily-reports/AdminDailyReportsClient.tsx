@@ -683,10 +683,18 @@ function TimelineSessionCard({
     <div className="rounded-xl border bg-card p-6">
       {/* Header: ユーザー名 + セッション情報を横並び */}
       <div className="flex items-start gap-8">
-        {/* 左: ユーザー名（固定幅で縦並びを揃える） */}
-        <div className="flex items-center gap-2 text-sm font-medium shrink-0 h-8 w-[120px]">
-          <UserIcon className="h-4 w-4 shrink-0" />
-          <span className="truncate">{session.userName}</span>
+        {/* 左: ユーザー名（固定幅で縦並びを揃える）+ 月ごと時は日付も表示 */}
+        <div className="shrink-0 w-[120px]">
+          <div className="flex items-center gap-2 text-sm font-medium h-8">
+            <UserIcon className="h-4 w-4 shrink-0" />
+            <span className="truncate">{session.userName}</span>
+          </div>
+          {showDate && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+              <CalendarIcon className="h-3 w-3" />
+              {session.reportDate}（{dayOfWeek}）
+            </div>
+          )}
         </div>
 
         {/* 右: セッション情報 + コンテンツ */}
@@ -702,12 +710,6 @@ function TimelineSessionCard({
               <span className="text-sm text-muted-foreground">
                 セッション{session.session_no}（{sessionTimeLabel ?? "--:--"}）{sessionWorkMinutes > 0 && `（${formatMinutesToHours(sessionWorkMinutes)}）`}
               </span>
-            )}
-            {showDate && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CalendarIcon className="h-4 w-4" />
-                {session.reportDate}（{dayOfWeek}）
-              </div>
             )}
             <div className="flex-1" />
             <ReactionCommentButtonsInline {...interactions} />
