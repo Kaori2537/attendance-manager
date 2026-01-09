@@ -63,7 +63,6 @@ export async function resumeWorkWithTasks(plannedTasks: Task[]) {
           date: ymd,
           mode: "resume",
           sessionNo: 1, // 1日1セッションなので常に1
-          userName: session?.user?.name,
           plannedTasks: planned,
         }),
       });

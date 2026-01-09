@@ -69,8 +69,7 @@ export async function clockOutWithTasks(
         date: ymd,
         mode: "checkout",
         sessionNo,
-        sessionId, 
-        userName: session?.user?.name, // ★ Slack用（backendで使用）
+        sessionId,
         actualTasks: actual,
         summary: summary ?? "",
         troubles: issues ?? "",

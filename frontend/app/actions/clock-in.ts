@@ -62,7 +62,6 @@ export async function clockInWithTasks(plannedTasks: Task[], sessionNo: number) 
         date: ymd,
         mode: "checkin",
         sessionNo,
-        userName: session?.user?.name, // ★ Slack用（backendで使用）
         plannedTasks: planned,
       }),
     });

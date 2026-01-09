@@ -21,9 +21,6 @@ type Body = {
   announcements?: string | null;
   sessionNo?: number;
 
-  // Slack display
-  userName?: string | null;
-
   // default true
   postToSlack?: boolean;
 };
@@ -62,6 +59,24 @@ function toTitle(t: DashboardTask): string {
 function nowTimeJp() {
   const now = new Date();
   return now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * DBからユーザー情報（name, avatar_url）を取得
+ */
+async function getUserInfo(sb: any, userId: string): Promise<{ name: string; avatarUrl: string | null }> {
+  const { data, error } = await sb
+    .from("users")
+    .select("name, avatar_url")
+    .eq("id", userId)
+    .single();
+
+  if (error || !data) {
+    console.error("Failed to fetch user info:", error);
+    return { name: "（ユーザー）", avatarUrl: null };
+  }
+
+  return { name: data.name || "（ユーザー）", avatarUrl: data.avatar_url };
 }
 
 // session_id + kind を"入れ替え"する（delete→insert）
@@ -208,8 +223,12 @@ function tasksToText(tasks: DashboardTask[]) {
 /**
  * Slackに投稿して ts を返す
  * thread_ts を指定するとスレッド返信になる
+ * iconUrl があれば icon_url を使用、なければ icon_emoji を使用
  */
-async function postSlackMessage(c: any, params: { text: string; userName?: string | null; threadTs?: string }) {
+async function postSlackMessage(
+  c: any,
+  params: { text: string; userName?: string | null; iconUrl?: string | null; threadTs?: string }
+) {
   const token = c.env.SLACK_BOT_TOKEN;
   const channel = c.env.SLACK_CHANNEL_ID;
 
@@ -226,7 +245,8 @@ async function postSlackMessage(c: any, params: { text: string; userName?: strin
       channel,
       text: params.text,
       username: params.userName ?? undefined,
-      icon_emoji: ":memo:",
+      // iconUrlがあればicon_urlを使用、なければicon_emojiをフォールバック
+      ...(params.iconUrl ? { icon_url: params.iconUrl } : { icon_emoji: ":memo:" }),
       thread_ts: params.threadTs ?? undefined,
     }),
   });
@@ -360,14 +380,17 @@ route.post("/", async (c) => {
     const hasResumeContent = body.mode === "resume" && body.plannedTasks?.length;
     if (shouldPost && (body.mode !== "resume" || hasResumeContent)) {
       const time = nowTimeJp();
-      const userName = body.userName ?? "（ユーザー）";
+      // DBからユーザー情報を取得
+      const userInfo = await getUserInfo(sb, userId);
+      const userName = userInfo.name;
+      const iconUrl = userInfo.avatarUrl;
 
       if (body.mode === "checkin") {
         // 出勤時：新規投稿
         const text = `${time}\n*${userName} さんが勤務開始しました！*\n\n*本日の予定*\n${tasksToText(
           body.plannedTasks ?? []
         )}`;
-        const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+        const { channelId, messageTs } = await postSlackMessage(c, { text, userName, iconUrl });
         await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "clock_in" });
       } else if (body.mode === "resume") {
         // 休憩終了時：出勤メッセージを編集（全タスクを含める）
@@ -419,7 +442,7 @@ route.post("/", async (c) => {
             const text = `${time}\n*${userName} さんが勤務再開しました！*\n\n*追加タスク*\n${tasksToText(
               body.plannedTasks ?? []
             )}`;
-            const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+            const { channelId, messageTs } = await postSlackMessage(c, { text, userName, iconUrl });
             await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "resume" });
           }
         } else {
@@ -427,7 +450,7 @@ route.post("/", async (c) => {
           const text = `${time}\n*${userName} さんが勤務再開しました！*\n\n*追加タスク*\n${tasksToText(
             body.plannedTasks ?? []
           )}`;
-          const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+          const { channelId, messageTs } = await postSlackMessage(c, { text, userName, iconUrl });
           await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "resume" });
         }
       } else {
@@ -460,7 +483,7 @@ route.post("/", async (c) => {
 
         const text = sections.join("");
         const threadTs = clockInLink?.message_ts ?? undefined;
-        const { channelId, messageTs } = await postSlackMessage(c, { text, userName, threadTs });
+        const { channelId, messageTs } = await postSlackMessage(c, { text, userName, iconUrl, threadTs });
         await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "clock_out" });
       }
     }
