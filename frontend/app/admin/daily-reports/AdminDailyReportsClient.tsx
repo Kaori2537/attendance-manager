@@ -683,10 +683,10 @@ function TimelineSessionCard({
     <div className="rounded-xl border bg-card p-6">
       {/* Header: ユーザー名 + セッション情報を横並び */}
       <div className="flex items-start gap-8">
-        {/* 左: ユーザー名 */}
-        <div className="flex items-center gap-2 text-sm font-medium shrink-0 h-8">
-          <UserIcon className="h-4 w-4" />
-          {session.userName}
+        {/* 左: ユーザー名（固定幅で縦並びを揃える） */}
+        <div className="flex items-center gap-2 text-sm font-medium shrink-0 h-8 w-[120px]">
+          <UserIcon className="h-4 w-4 shrink-0" />
+          <span className="truncate">{session.userName}</span>
         </div>
 
         {/* 右: セッション情報 + コンテンツ */}
