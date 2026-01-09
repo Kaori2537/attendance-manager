@@ -207,8 +207,9 @@ function tasksToText(tasks: DashboardTask[]) {
 
 /**
  * Slackに投稿して ts を返す
+ * thread_ts を指定するとスレッド返信になる
  */
-async function postSlackMessage(c: any, params: { text: string; userName?: string | null }) {
+async function postSlackMessage(c: any, params: { text: string; userName?: string | null; threadTs?: string }) {
   const token = c.env.SLACK_BOT_TOKEN;
   const channel = c.env.SLACK_CHANNEL_ID;
 
@@ -226,6 +227,7 @@ async function postSlackMessage(c: any, params: { text: string; userName?: strin
       text: params.text,
       username: params.userName ?? undefined,
       icon_emoji: ":memo:",
+      thread_ts: params.threadTs ?? undefined,
     }),
   });
 
@@ -429,19 +431,36 @@ route.post("/", async (c) => {
           await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "resume" });
         }
       } else {
-        // 退勤時：新規投稿
-        const text = `${time}\n*${userName} さんが勤務終了しました！*\n\n*今日やったこと*\n${tasksToText(
-          body.actualTasks ?? []
-        )}${
-          body.summary?.trim() ? `\n\n*まとめ*\n${body.summary.trim()}` : ""
-        }${
-          body.troubles?.trim() ? `\n\n*困っていること*\n${body.troubles.trim()}` : ""
-        }${
-          body.announcements?.trim()
-            ? `\n\n*連絡事項*\n${body.announcements.trim()}`
-            : ""
-        }`;
-        const { channelId, messageTs } = await postSlackMessage(c, { text, userName });
+        // 退勤時：出勤メッセージへのスレッド返信として投稿
+        // 1. clock_inのSlackリンクを取得
+        const { data: clockInLink } = await sb
+          .from("daily_report_slack_links")
+          .select("channel_id, message_ts")
+          .eq("daily_report_session_id", session.id)
+          .eq("kind", "clock_in")
+          .maybeSingle();
+
+        // 2. 入力された項目のみ表示するテキストを構築
+        const sections: string[] = [];
+        sections.push(`${time}\n*${userName} さんが勤務終了しました！*`);
+
+        const actualTasks = body.actualTasks ?? [];
+        if (actualTasks.length > 0) {
+          sections.push(`\n*今日やったこと*\n${tasksToText(actualTasks)}`);
+        }
+        if (body.summary?.trim()) {
+          sections.push(`\n*まとめ*\n${body.summary.trim()}`);
+        }
+        if (body.troubles?.trim()) {
+          sections.push(`\n*困っていること*\n${body.troubles.trim()}`);
+        }
+        if (body.announcements?.trim()) {
+          sections.push(`\n*連絡事項*\n${body.announcements.trim()}`);
+        }
+
+        const text = sections.join("");
+        const threadTs = clockInLink?.message_ts ?? undefined;
+        const { channelId, messageTs } = await postSlackMessage(c, { text, userName, threadTs });
         await saveSlackLink(sb, { sessionId: session.id, channelId, messageTs, kind: "clock_out" });
       }
     }
