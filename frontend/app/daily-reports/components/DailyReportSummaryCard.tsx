@@ -289,8 +289,7 @@ export function DailyReportSummaryCard({
                     key={c.id}
                     className="rounded-lg border bg-muted/30 p-3 text-sm"
                   >
-                    <div className="whitespace-pre-wrap">{c.text}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {new Date(c.createdAt).toLocaleString("ja-JP", {
                         month: "short",
                         day: "numeric",
@@ -298,6 +297,7 @@ export function DailyReportSummaryCard({
                         minute: "2-digit",
                       })}
                     </div>
+                    <div className="mt-1 whitespace-pre-wrap">{c.text}</div>
                   </div>
                 ))}
               </div>

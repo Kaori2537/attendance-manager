@@ -1538,6 +1538,13 @@ function ReactionCommentButtonsInline({
   comments,
   showCommentInput,
   setShowCommentInput,
+  newComment,
+  setNewComment,
+  sendingComment,
+  handleSendComment,
+  handleStartEdit,
+  handleDeleteComment,
+  setDeleteConfirmId,
 }: {
   reactionCounts: Record<string, number>;
   sendingReaction: boolean;
@@ -1545,8 +1552,16 @@ function ReactionCommentButtonsInline({
   comments: Comment[];
   showCommentInput: boolean;
   setShowCommentInput: (v: boolean) => void;
+  newComment: string;
+  setNewComment: (v: string) => void;
+  sendingComment: boolean;
+  handleSendComment: () => void;
+  handleStartEdit: (c: Comment) => void;
+  handleDeleteComment: (id: string) => void;
+  setDeleteConfirmId: (id: string | null) => void;
 }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCommentPopover, setShowCommentPopover] = useState(false);
 
   const hasComments = comments.length > 0;
 
@@ -1595,19 +1610,89 @@ function ReactionCommentButtonsInline({
         </PopoverContent>
       </Popover>
 
-      {/* コメントボタン（コメント数バッジ付き） */}
-      <button
-        onClick={() => setShowCommentInput(!showCommentInput)}
-        className={`flex items-center justify-center gap-1 h-6 px-1.5 rounded-md transition-colors ${
-          showCommentInput
-            ? "bg-muted/80"
-            : "bg-muted hover:bg-muted/80"
-        } text-muted-foreground`}
-        title="コメント"
-      >
-        <MessageCircleIcon className="h-3.5 w-3.5" />
-        {hasComments && <span className="text-xs">{comments.length}</span>}
-      </button>
+      {/* コメントボタン（コメント数バッジ付き） - クリックでポップオーバー */}
+      <Popover open={showCommentPopover} onOpenChange={setShowCommentPopover}>
+        <PopoverTrigger asChild>
+          <button
+            className="flex items-center justify-center gap-1 h-6 px-1.5 rounded-md transition-colors bg-muted hover:bg-muted/80 text-muted-foreground"
+            title="コメント"
+          >
+            <MessageCircleIcon className="h-3.5 w-3.5" />
+            {hasComments && <span className="text-xs">{comments.length}</span>}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-3" align="end">
+          <div className="space-y-3">
+            {/* 既存のコメント */}
+            {comments.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {comments.map((c) => (
+                  <div key={c.id} className="bg-muted/50 rounded-md px-3 py-2 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(c.created_at), "M/d HH:mm")}
+                          {c.source === "slack" && " (Slack)"}
+                        </p>
+                        <p className="mt-1 break-words">{c.text}</p>
+                      </div>
+                      {c.source !== "slack" && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => {
+                              handleStartEdit(c);
+                              setShowCommentPopover(false);
+                            }}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            title="編集"
+                          >
+                            <PencilIcon className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeleteConfirmId(c.id);
+                              setShowCommentPopover(false);
+                            }}
+                            className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600 transition-colors"
+                            title="削除"
+                          >
+                            <TrashIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 新規コメント入力 */}
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="コメントを入力..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendComment();
+                  }
+                }}
+                disabled={sendingComment}
+                className="flex-1 text-sm"
+              />
+              <Button
+                size="icon"
+                onClick={handleSendComment}
+                disabled={!newComment.trim() || sendingComment}
+                className="h-8 w-8"
+              >
+                <SendIcon className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
