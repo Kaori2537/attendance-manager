@@ -32,6 +32,17 @@ type Session = {
   summary?: string | null;
   troubles?: string | null;
   announcements?: string | null;
+
+  reactions?: Record<string, number>;
+};
+
+const EMOJI_MAP: Record<string, string> = {
+  "+1": "👍",
+  tada: "🎉",
+  clap: "👏",
+  white_check_mark: "✅",
+  pray: "🙏",
+  eyes: "👀",
 };
 
 type AttendancePayload = {
@@ -124,6 +135,8 @@ export function DailyReportSummaryCard({
 
   const hasAttendance = !!attendance?.attendanceId;
 
+  const hasReactions = session?.reactions && Object.keys(session.reactions).length > 0;
+
   return (
     <Card className="h-full">
       <CardHeader>
@@ -188,13 +201,10 @@ export function DailyReportSummaryCard({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">今日やること</div>
-
-            <div className="rounded-lg bg-muted/30 p-3">
-              {plannedTasks.length === 0 ? (
-                <p className="text-sm">未入力</p>
-              ) : (
+          {plannedTasks.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">今日やること</div>
+              <div className="rounded-lg bg-muted/30 p-3">
                 <ul className="space-y-2">
                   {plannedTasks.map((t) => (
                     <li key={t.id} className="flex justify-between gap-3">
@@ -205,21 +215,19 @@ export function DailyReportSummaryCard({
                     </li>
                   ))}
                 </ul>
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         {/* --- 勤務終了時（actual + メモ） --- */}
         <section className="space-y-3 border-l-4 border-green-500 pl-4">
           <h3 className="font-bold text-green-600">勤務終了時</h3>
 
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">今日やったこと</div>
-            <div className="rounded-lg bg-muted/30 p-3">
-              {actualTasks.length === 0 ? (
-                <p className="text-sm">未入力</p>
-              ) : (
+          {actualTasks.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">今日やったこと</div>
+              <div className="rounded-lg bg-muted/30 p-3">
                 <ul className="space-y-2">
                   {actualTasks.map((t) => (
                     <li key={t.id} className="flex justify-between gap-3">
@@ -230,31 +238,53 @@ export function DailyReportSummaryCard({
                     </li>
                   ))}
                 </ul>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">本日のまとめ</div>
-            <div className="rounded-lg bg-muted/30 p-3 text-sm leading-relaxed">
-              {session?.summary?.trim() ? session.summary : "未入力"}
+          {session?.summary?.trim() && (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">本日のまとめ</div>
+              <div className="rounded-lg bg-muted/30 p-3 text-sm leading-relaxed">
+                {session.summary}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">困っていること・相談したいこと</div>
-            <div className="rounded-lg bg-muted/30 p-3 text-sm leading-relaxed">
-              {session?.troubles?.trim() ? session.troubles : "未入力"}
+          {session?.troubles?.trim() && (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">困っていること・相談したいこと</div>
+              <div className="rounded-lg bg-muted/30 p-3 text-sm leading-relaxed">
+                {session.troubles}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">連絡事項</div>
-            <div className="rounded-lg bg-muted/30 p-3 text-sm leading-relaxed">
-              {session?.announcements?.trim() ? session.announcements : "未入力"}
+          {session?.announcements?.trim() && (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">連絡事項</div>
+              <div className="rounded-lg bg-muted/30 p-3 text-sm leading-relaxed">
+                {session.announcements}
+              </div>
             </div>
-          </div>
+          )}
         </section>
+
+        {/* --- リアクション --- */}
+        {hasReactions && (
+          <div className="flex justify-end">
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(session!.reactions!).map(([emoji, count]) => (
+                <span
+                  key={emoji}
+                  className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-sm"
+                >
+                  {EMOJI_MAP[emoji] ?? emoji} {count}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
