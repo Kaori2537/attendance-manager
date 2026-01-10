@@ -92,7 +92,7 @@ export const BreakDialog = ({
 
                 <div className="space-y-4 py-4">
                     <div>
-                        <Label className="text-base">追加タスクと予定工数</Label>
+                        <Label className="text-base">追加タスクと予定工数（時間）</Label>
                         <div className="space-y-3 mt-3">
                             {additionalTasks.map((task, index) => (
                                 <div key={index} className="flex gap-2 items-start">
@@ -107,20 +107,18 @@ export const BreakDialog = ({
                                             }}
                                         />
                                     </div>
-                                    <div className="w-24">
-                                        <div className="relative">
-                                            <Input
-                                                placeholder="1"
-                                                value={task.hours}
-                                                onChange={(e) => {
-                                                    const newList = [...additionalTasks];
-                                                    newList[index].hours = e.target.value;
-                                                    setAdditionalTasks(newList);
-                                                }}
-                                                className="pr-8"
-                                            />
-                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">h</span>
-                                        </div>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            placeholder="1"
+                                            value={task.hours}
+                                            onChange={(e) => {
+                                                const newList = [...additionalTasks];
+                                                newList[index].hours = e.target.value;
+                                                setAdditionalTasks(newList);
+                                            }}
+                                            className="w-20"
+                                        />
+                                        <span className="text-sm text-muted-foreground">h</span>
                                     </div>
                                     {additionalTasks.length > 1 && (
                                         <Button
