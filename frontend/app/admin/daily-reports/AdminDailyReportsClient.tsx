@@ -711,6 +711,13 @@ function TimelineSessionCard({
                 セッション{session.session_no}（{sessionTimeLabel ?? "--:--"}）{sessionWorkMinutes > 0 && `（${formatMinutesToHours(sessionWorkMinutes)}）`}
               </span>
             )}
+            {/* 困りごとがある場合はアラート表示 */}
+            {session.troubles && (
+              <span className="flex items-center gap-1 text-sm text-red-500" title="困りごとあり">
+                <AlertCircleIcon className="h-4 w-4" />
+                <span className="text-xs">困りごとあり</span>
+              </span>
+            )}
             <div className="flex-1" />
             <ReactionCommentButtonsInline {...interactions} />
             {!isSingleSession && (
