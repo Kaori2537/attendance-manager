@@ -145,6 +145,36 @@ export function DailyReportSummaryCard({
   const hasReactions = session?.reactions && Object.keys(session.reactions).length > 0;
   const hasComments = session?.comments && session.comments.length > 0;
 
+  // 日報データが実質的に空かどうか（タスクもメモも何もない）
+  const hasNoContent =
+    plannedTasks.length === 0 &&
+    actualTasks.length === 0 &&
+    !session?.summary?.trim() &&
+    !session?.troubles?.trim() &&
+    !session?.announcements?.trim();
+
+  // 日報データがない場合、または実質的に空の場合
+  if (!session || hasNoContent) {
+    return (
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>詳細情報</CardTitle>
+          <CardDescription>
+            {selectedDate?.toLocaleDateString("ja-JP", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              weekday: "long",
+            })}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground text-center py-8">この日の日報データはありません</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="h-full">
       <CardHeader>

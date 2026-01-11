@@ -41,10 +41,16 @@ dailyReportsListRouter.get('/', async (c) => {
 
   const supabase = getDailyReportSupabaseClient(c.env)
 
-  // --- fetch ---
+  // --- fetch daily_reports with sessions and tasks ---
   const { data, error } = await supabase
     .from('daily_reports')
-    .select('id, user_id, report_date, content, created_at, updated_at')
+    .select(`
+      id, user_id, report_date, content, created_at, updated_at,
+      daily_report_sessions (
+        id, summary, troubles, announcements,
+        daily_report_tasks ( id )
+      )
+    `)
     .eq('user_id', userId)
     .gte('report_date', start)
     .lte('report_date', end)
@@ -55,7 +61,18 @@ dailyReportsListRouter.get('/', async (c) => {
     return c.json({ error: 'Database error', detail: error }, 500)
   }
 
-  const formatted = (data ?? []).map((d) => ({
+  // 実質的に内容がある日報のみをフィルタリング
+  const filtered = (data ?? []).filter((d) => {
+    const sessions = (d as any).daily_report_sessions ?? []
+    // いずれかのセッションにタスクまたはメモがあるか
+    return sessions.some((s: any) => {
+      const hasTasks = (s.daily_report_tasks ?? []).length > 0
+      const hasMemo = !!(s.summary?.trim() || s.troubles?.trim() || s.announcements?.trim())
+      return hasTasks || hasMemo
+    })
+  })
+
+  const formatted = filtered.map((d) => ({
     id: d.id,
     userId: d.user_id,
     reportDate: d.report_date,
