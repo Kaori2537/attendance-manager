@@ -308,44 +308,41 @@ export function DailyReportSummaryCard({
           )}
         </section>
 
-        {/* --- コメント・リアクション --- */}
-        {(hasComments || hasReactions) && (
-          <div className="flex items-end justify-between gap-4">
-            {/* コメント（左側） */}
-            {hasComments && (
-              <div className="flex-1 space-y-2">
-                {session!.comments!.map((c) => (
-                  <div
-                    key={c.id}
-                    className="rounded-lg border bg-muted/30 p-3 text-sm"
-                  >
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(c.createdAt).toLocaleString("ja-JP", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                    <div className="mt-1 whitespace-pre-wrap">{c.text}</div>
-                  </div>
-                ))}
+        {/* --- コメント --- */}
+        {hasComments && (
+          <div className="space-y-2">
+            {session!.comments!.map((c) => (
+              <div
+                key={c.id}
+                className="rounded-lg border bg-muted/30 p-3 text-sm"
+              >
+                <div className="text-xs text-muted-foreground">
+                  {new Date(c.createdAt).toLocaleString("ja-JP", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+                <div className="mt-1 whitespace-pre-wrap">{c.text}</div>
               </div>
-            )}
+            ))}
+          </div>
+        )}
 
-            {/* リアクション（右側） */}
-            {hasReactions && (
-              <div className="flex flex-wrap justify-end gap-1">
-                {Object.entries(session!.reactions!).map(([emoji, count]) => (
-                  <span
-                    key={emoji}
-                    className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-sm"
-                  >
-                    {EMOJI_MAP[emoji] ?? emoji} {count}
-                  </span>
-                ))}
-              </div>
-            )}
+        {/* --- リアクション（右寄せ） --- */}
+        {hasReactions && (
+          <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-1">
+              {Object.entries(session!.reactions!).map(([emoji, count]) => (
+                <span
+                  key={emoji}
+                  className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-sm"
+                >
+                  {EMOJI_MAP[emoji] ?? emoji} {count}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
