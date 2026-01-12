@@ -7,6 +7,7 @@ import { clockInWithTasks } from "@/app/actions/clock-in";
 import { clockOutWithTasks } from "@/app/actions/clock-out";
 import { breakStart } from "@/app/actions/break-start";
 import { resumeWorkWithTasks } from "@/app/actions/resume-work";
+import { resumeClockIn } from "@/app/actions/resume-clock-in";
 
 // セッション検出（出勤中かどうか）
 function detectCurrentSession(attendance: AttendanceRecord | null): WorkSession | null {
@@ -22,9 +23,20 @@ function detectOnBreak(currentSession: WorkSession | null): boolean {
   return !lastBreak.end;
 }
 
-// 1日1セッション制限のため、常にセッション番号は1
-function getSessionNo() {
-  return 1;
+// 中断済み（今日既にセッションがあり、終了しているが退勤完了ではない）かどうか検出
+function detectHasPreviousSession(attendance: AttendanceRecord | null, isClockedOut: boolean): boolean {
+  if (!attendance?.sessions?.length) return false;
+  // 退勤完了している場合は中断状態ではない
+  if (isClockedOut) return false;
+  // 最後のセッションが終了している = 中断済み
+  const lastSession = attendance.sessions[attendance.sessions.length - 1];
+  return !!lastSession.clockOut;
+}
+
+// 次のセッション番号を取得
+function getNextSessionNo(attendance: AttendanceRecord | null): number {
+  if (!attendance?.sessions?.length) return 1;
+  return attendance.sessions.length + 1;
 }
 
 export function useAttendance() {
@@ -32,6 +44,10 @@ export function useAttendance() {
   const [currentSession, setCurrentSession] = useState<WorkSession | null>(null);
   const [onBreak, setOnBreak] = useState<boolean>(false);
   const [weekTotalMs, setWeekTotalMs] = useState<number>(0);
+  // 中断済みかどうか（再出勤可能状態）
+  const [hasPreviousSession, setHasPreviousSession] = useState<boolean>(false);
+  // 退勤完了済みかどうか（日報入力済み）
+  const [isClockedOut, setIsClockedOut] = useState<boolean>(false);
 
   const loadAll = async () => {
     try {
@@ -40,9 +56,14 @@ export function useAttendance() {
 
       const session = detectCurrentSession(todayData);
 
+      // 退勤完了済みかどうか（日報のsummaryがあれば退勤済みとみなす）
+      const clockedOut = !!(todayData as any)?.summary;
+
       setAttendance(todayData);
       setCurrentSession(session);
       setOnBreak(detectOnBreak(session));
+      setIsClockedOut(clockedOut);
+      setHasPreviousSession(detectHasPreviousSession(todayData, clockedOut));
       setWeekTotalMs(weekly.netWorkMs);
     } catch (e) {
       console.error("Failed to load attendance:", e);
@@ -53,9 +74,9 @@ export function useAttendance() {
     loadAll();
   }, []);
 
-  // 出勤
+  // 出勤（初回）
   const handleClockIn = async (plannedTasks: Task[]) => {
-    const sessionNo = getSessionNo();
+    const sessionNo = getNextSessionNo(attendance);
     const res = await clockInWithTasks(plannedTasks, sessionNo);
     await loadAll();
 
@@ -64,14 +85,33 @@ export function useAttendance() {
     }
   };
 
-  // 退勤
+  // 再出勤（中断後）- 追加タスク入力付き、セッション1として扱う
+  const handleResume = async (additionalTasks: Task[]) => {
+    const res = await resumeClockIn(additionalTasks);
+    await loadAll();
+
+    if (!res.success) {
+      console.error("Resume failed:", res.error);
+    }
+  };
+
+  // 退勤（常にセッション1として扱う）
   const handleClockOut = async (actualTasks: Task[], summary: string, issues: string, notes: string) => {
-    const sessionNo = getSessionNo();
-    const res = await clockOutWithTasks(actualTasks, summary, issues, notes, sessionNo);
+    const res = await clockOutWithTasks(actualTasks, summary, issues, notes, 1);
     await loadAll();
 
     if (!res.success) {
       console.error("Clock-out failed:", res.error);
+    }
+  };
+
+  // 中断（日報入力なしでセッション終了）
+  const handleStop = async () => {
+    const res = await fetch("/api/attendance/clock-out", { method: "POST" });
+    await loadAll();
+
+    if (!res.ok) {
+      console.error("Stop failed:", await res.text());
     }
   };
 
@@ -85,9 +125,9 @@ export function useAttendance() {
     }
   };
 
-  // 休憩終了（タスク追加対応）
-  const handleBreakEnd = async (additionalTasks: Task[]) => {
-    const res = await resumeWorkWithTasks(additionalTasks);
+  // 休憩終了（タスク入力なし）
+  const handleBreakEnd = async () => {
+    const res = await resumeWorkWithTasks([]);
     await loadAll();
 
     if (!res.success) {
@@ -99,9 +139,13 @@ export function useAttendance() {
     attendance,
     currentSession,
     onBreak,
+    hasPreviousSession,
+    isClockedOut,
     weekTotalMs,
     handleClockIn,
+    handleResume,
     handleClockOut,
+    handleStop,
     handleBreakStart,
     handleBreakEnd,
   };

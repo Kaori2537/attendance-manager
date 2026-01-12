@@ -9,6 +9,9 @@ import { SummaryCard } from "./components/SummaryCard";
 import { BreakDialog } from "./components/BreakDialog";
 import { ClockInDialog } from "./components/ClockInDialog";
 import { ClockOutDialog } from "./components/ClockOutDialog";
+import { StopOrClockOutDialog } from "./components/StopOrClockOutDialog";
+import { StopConfirmDialog } from "./components/StopConfirmDialog";
+import { ResumeDialog } from "./components/ResumeDialog";
 
 import { useAttendance } from "./hooks/useAttendance";
 import { useClockDialogs } from "./hooks/useClockDialogs";
@@ -18,9 +21,13 @@ export default function Page() {
     attendance,
     currentSession,
     onBreak,
+    hasPreviousSession,
+    isClockedOut,
     weekTotalMs,
     handleClockIn,
+    handleResume,
     handleClockOut,
+    handleStop,
     handleBreakStart,
     handleBreakEnd,
   } = useAttendance();
@@ -30,8 +37,14 @@ export default function Page() {
     showClockOutDialog,
     showBreakDialog,
     breakMode,
+    showStopOrClockOutDialog,
+    showStopConfirmDialog,
+    showResumeDialog,
     openClockIn,
+    openResume,
+    openStopOrClockOut,
     openClockOut,
+    openStopConfirm,
     openBreakStart,
     openBreakEnd,
     closeDialogs,
@@ -45,11 +58,14 @@ export default function Page() {
 
       <PunchButtons
         onClockIn={openClockIn}
-        onClockOut={openClockOut}
+        onResume={openResume}
+        onStopOrClockOut={openStopOrClockOut}
         onBreakStart={openBreakStart}
         onBreakEnd={openBreakEnd}
         onBreak={onBreak}
         isWorking={isWorking}
+        hasPreviousSession={hasPreviousSession}
+        isClockedOut={isClockedOut}
       />
 
       <SummaryCard attendance={attendance} />
@@ -71,9 +87,30 @@ export default function Page() {
         open={showBreakDialog}
         mode={breakMode}
         onClose={closeDialogs}
-        // ✅ props名を合わせる
         onStart={handleBreakStart}
         onEnd={handleBreakEnd}
+      />
+
+      {/* 中断・退勤選択ダイアログ */}
+      <StopOrClockOutDialog
+        open={showStopOrClockOutDialog}
+        onClose={closeDialogs}
+        onSelectStop={openStopConfirm}
+        onSelectClockOut={openClockOut}
+      />
+
+      {/* 中断確認ダイアログ */}
+      <StopConfirmDialog
+        open={showStopConfirmDialog}
+        onClose={closeDialogs}
+        onConfirm={handleStop}
+      />
+
+      {/* 再出勤ダイアログ */}
+      <ResumeDialog
+        open={showResumeDialog}
+        onClose={closeDialogs}
+        onSubmit={handleResume}
       />
     </div>
   );
