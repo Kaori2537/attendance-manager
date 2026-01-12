@@ -179,17 +179,54 @@ route.get("/", async (c) => {
       const report = (reports ?? []).find((r: any) => r.id === s.daily_report_id);
       let clockIn: string | null = null;
       let clockOut: string | null = null;
+      let workMinutes = 0;
+      let timeRanges: { clockIn: string; clockOut: string | null }[] = [];
 
       if (report) {
         const attKey = `${report.user_id}_${report.report_date}`;
         const attendance = attendanceMap.get(attKey);
-        if (attendance?.workSessions) {
-          // session_no に対応する workSession を取得（1-indexed）
-          const wsIndex = s.session_no - 1;
-          const ws = attendance.workSessions[wsIndex];
-          if (ws) {
-            clockIn = ws.clock_in;
-            clockOut = ws.clock_out;
+        if (attendance?.workSessions?.length > 0) {
+          // セッション1の場合は全てのwork_sessionsを集約
+          // それ以外の場合は対応するwork_sessionのみ
+          if (s.session_no === 1) {
+            // 全てのwork_sessionsの最初のclock_inと最後のclock_outを取得
+            const sorted = [...attendance.workSessions].sort(
+              (a: any, b: any) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime()
+            );
+            clockIn = sorted[0]?.clock_in ?? null;
+            clockOut = sorted[sorted.length - 1]?.clock_out ?? null;
+
+            // 各work_sessionの時間範囲と実働時間を計算
+            for (const ws of sorted) {
+              if (ws.clock_in) {
+                timeRanges.push({
+                  clockIn: ws.clock_in,
+                  clockOut: ws.clock_out,
+                });
+              }
+              if (ws.clock_in && ws.clock_out) {
+                const ms = new Date(ws.clock_out).getTime() - new Date(ws.clock_in).getTime();
+                workMinutes += Math.max(0, Math.round(ms / 60000));
+              }
+            }
+          } else {
+            // session_no に対応する workSession を取得（1-indexed）
+            const wsIndex = s.session_no - 1;
+            const ws = attendance.workSessions[wsIndex];
+            if (ws) {
+              clockIn = ws.clock_in;
+              clockOut = ws.clock_out;
+              if (ws.clock_in) {
+                timeRanges.push({
+                  clockIn: ws.clock_in,
+                  clockOut: ws.clock_out,
+                });
+              }
+              if (ws.clock_in && ws.clock_out) {
+                const ms = new Date(ws.clock_out).getTime() - new Date(ws.clock_in).getTime();
+                workMinutes = Math.max(0, Math.round(ms / 60000));
+              }
+            }
           }
         }
       }
@@ -199,6 +236,8 @@ route.get("/", async (c) => {
         tasks: tasksBySessionId.get(s.id) ?? [],
         clock_in: clockIn,
         clock_out: clockOut,
+        work_minutes: workMinutes,
+        time_ranges: timeRanges,
       });
       sessionsByReportId.set(s.daily_report_id, arr);
     }

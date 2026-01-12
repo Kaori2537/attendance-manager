@@ -66,6 +66,11 @@ type Task = {
   sort_order: number;
 };
 
+type TimeRange = {
+  clockIn: string;
+  clockOut: string | null;
+};
+
 type Session = {
   id: string;
   daily_report_id: string;
@@ -76,6 +81,8 @@ type Session = {
   tasks: Task[];
   clock_in: string | null;
   clock_out: string | null;
+  work_minutes?: number;
+  time_ranges?: TimeRange[];
 };
 
 type Report = {
@@ -653,14 +660,20 @@ function TimelineSessionCard({
   // セッションが1回だけかどうか
   const isSingleSession = session.sessionCount === 1;
 
-  // セッションの出退勤時間を表示
-  const sessionTimeLabel = session.clock_in
-    ? `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`
-    : null;
+  // セッションの出退勤時間を表示（複数の時間範囲がある場合はカンマ区切り）
+  let sessionTimeLabel: string | null = null;
+  if (session.time_ranges && session.time_ranges.length > 0) {
+    // 複数の時間範囲を表示
+    sessionTimeLabel = session.time_ranges
+      .map((tr) => `${formatTime(tr.clockIn)}～${formatTime(tr.clockOut)}`)
+      .join("、");
+  } else if (session.clock_in) {
+    sessionTimeLabel = `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`;
+  }
 
-  // セッションの勤務時間を計算
-  let sessionWorkMinutes = 0;
-  if (session.clock_in && session.clock_out) {
+  // セッションの勤務時間（バックエンドで計算済み、なければ従来の計算）
+  let sessionWorkMinutes = session.work_minutes ?? 0;
+  if (!session.work_minutes && session.clock_in && session.clock_out) {
     const ms = new Date(session.clock_out).getTime() - new Date(session.clock_in).getTime();
     sessionWorkMinutes = Math.max(0, Math.round(ms / 60000));
   }
@@ -1241,14 +1254,19 @@ function DialogSessionSection({ session, isLast, apiToken }: { session: Session;
   const plannedTasks = session.tasks.filter((t) => t.kind === "planned");
   const actualTasks = session.tasks.filter((t) => t.kind === "actual");
 
-  // セッションの出退勤時間を表示
-  const sessionTimeLabel = session.clock_in
-    ? `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`
-    : null;
+  // セッションの出退勤時間を表示（複数の時間範囲がある場合はカンマ区切り）
+  let sessionTimeLabel: string | null = null;
+  if (session.time_ranges && session.time_ranges.length > 0) {
+    sessionTimeLabel = session.time_ranges
+      .map((tr) => `${formatTime(tr.clockIn)}～${formatTime(tr.clockOut)}`)
+      .join("、");
+  } else if (session.clock_in) {
+    sessionTimeLabel = `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`;
+  }
 
-  // セッションの勤務時間を計算
-  let sessionWorkMinutes = 0;
-  if (session.clock_in && session.clock_out) {
+  // セッションの勤務時間（バックエンドで計算済み、なければ従来の計算）
+  let sessionWorkMinutes = session.work_minutes ?? 0;
+  if (!session.work_minutes && session.clock_in && session.clock_out) {
     const ms = new Date(session.clock_out).getTime() - new Date(session.clock_in).getTime();
     sessionWorkMinutes = Math.max(0, Math.round(ms / 60000));
   }
@@ -2293,14 +2311,19 @@ function SessionSection({ session, isLast, apiToken }: { session: Session; isLas
   const actualTasks = session.tasks.filter((t) => t.kind === "actual");
   const totalMinutes = actualTasks.reduce((sum, t) => sum + t.minutes, 0);
 
-  // セッションの出退勤時間を表示
-  const sessionTimeLabel = session.clock_in
-    ? `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`
-    : null;
+  // セッションの出退勤時間を表示（複数の時間範囲がある場合はカンマ区切り）
+  let sessionTimeLabel: string | null = null;
+  if (session.time_ranges && session.time_ranges.length > 0) {
+    sessionTimeLabel = session.time_ranges
+      .map((tr) => `${formatTime(tr.clockIn)}～${formatTime(tr.clockOut)}`)
+      .join("、");
+  } else if (session.clock_in) {
+    sessionTimeLabel = `${formatTime(session.clock_in)}～${formatTime(session.clock_out)}`;
+  }
 
-  // セッションの勤務時間を計算
-  let sessionWorkMinutes = 0;
-  if (session.clock_in && session.clock_out) {
+  // セッションの勤務時間（バックエンドで計算済み、なければ従来の計算）
+  let sessionWorkMinutes = session.work_minutes ?? 0;
+  if (!session.work_minutes && session.clock_in && session.clock_out) {
     const ms = new Date(session.clock_out).getTime() - new Date(session.clock_in).getTime();
     sessionWorkMinutes = Math.max(0, Math.round(ms / 60000));
   }
