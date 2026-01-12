@@ -1,5 +1,4 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { AttendanceRecord } from "../../../../shared/types/Attendance";
 import { SessionItem } from "./SessionItem";
 import { formatDurationMs } from "@/lib/time";
@@ -31,29 +30,15 @@ export function DayDetailCard({
             <CardContent className="space-y-4 flex-1">
                 {selectedDayData ? (
                     <>
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center pb-2 border-b">
-                                <span>総勤務時間</span>
-                                <span className="text-xl">
-                                    {formatDurationMs(calculateDayWorkHours(selectedDayData.sessions))}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm text-muted-foreground">セッション数</span>
-                                <Badge>{selectedDayData.sessions.length}回</Badge>
-                            </div>
+                        <div className="flex justify-between items-center pb-2 border-b">
+                            <span>総勤務時間</span>
+                            <span className="text-xl">
+                                {formatDurationMs(calculateDayWorkHours(selectedDayData.sessions))}
+                            </span>
                         </div>
 
-                        <div className="space-y-3 pt-2">
-                            <p className="text-sm text-muted-foreground">セッション詳細</p>
-
-                            {selectedDayData.sessions.map((s, i) => (
-                                <SessionItem
-                                    key={s.id}
-                                    session={s}
-                                    index={i}
-                                />
-                            ))}
+                        <div className="pt-2">
+                            <SessionItem sessions={selectedDayData.sessions} />
                         </div>
                     </>
                 ) : (
