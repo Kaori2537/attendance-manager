@@ -115,10 +115,12 @@ route.post("/:sessionId/comments", async (c) => {
 
       if (report?.user_id && report.user_id !== payload.id) {
         // コメント投稿者と日報の所有者が異なる場合のみ通知
+        const [, m, d] = report.report_date.split("-").map(Number);
+        const dateLabel = `${m}月${d}日`;
         await sb.from("notifications").insert({
           user_id: report.user_id,
           type: "comment",
-          title: "日報にコメントがつきました",
+          title: `${dateLabel}の日報にコメントがつきました`,
           message: text.length > 50 ? text.slice(0, 50) + "..." : text,
           link: `/daily-reports?date=${report.report_date}`,
         });

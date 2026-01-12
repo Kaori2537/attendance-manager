@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { DailyReportsCalendarPanel } from "./components/DailyReportsCalendarPanel";
 import { DailyReportSummaryCard } from "./components/DailyReportSummaryCard";
 import { useDailyReportsCalendar } from "./hooks/useDailyReportsCalendar";
@@ -13,7 +14,17 @@ function toYmd(d: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function parseYmd(ymd: string): Date | null {
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d));
+}
+
 export default function Page() {
+  const searchParams = useSearchParams();
+  const dateParam = searchParams.get("date");
+
   const {
     currentMonth,
     setCurrentMonth,
@@ -21,6 +32,18 @@ export default function Page() {
     setSelectedDate,
     dailyReportDates,
   } = useDailyReportsCalendar();
+
+  // URLのdateパラメータからカレンダーの日付を設定
+  useEffect(() => {
+    if (dateParam) {
+      const parsedDate = parseYmd(dateParam);
+      if (parsedDate) {
+        setSelectedDate(parsedDate);
+        // カレンダーの月も合わせる
+        setCurrentMonth(new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1));
+      }
+    }
+  }, [dateParam, setSelectedDate, setCurrentMonth]);
 
   const selectedYmd = useMemo(
     () => (selectedDate ? toYmd(selectedDate) : null),

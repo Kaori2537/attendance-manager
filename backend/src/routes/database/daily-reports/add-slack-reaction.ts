@@ -155,10 +155,12 @@ export default new Hono<{ Bindings: Env }>()
           "eyes": "👀",
         };
         const emojiLabel = emojiMap[emoji] ?? emoji;
+        const [, m, d] = report.report_date.split("-").map(Number);
+        const dateLabel = `${m}月${d}日`;
         await sb.from("notifications").insert({
           user_id: report.user_id,
           type: "reaction",
-          title: "日報にリアクションがつきました",
+          title: `${dateLabel}の日報にリアクションがつきました`,
           message: emojiLabel,
           link: `/daily-reports?date=${report.report_date}`,
         });
