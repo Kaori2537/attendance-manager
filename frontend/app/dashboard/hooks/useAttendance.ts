@@ -54,10 +54,28 @@ export function useAttendance() {
       const todayData: AttendanceRecord = await fetch("/api/attendance/day").then((r) => r.json());
       const weekly = await fetch("/api/attendance/week-total-hours").then((r) => r.json());
 
-      const session = detectCurrentSession(todayData);
+      // 日報データを取得して退勤済みかどうか判定
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      const dateStr = `${yyyy}-${mm}-${dd}`;
 
-      // 退勤完了済みかどうか（日報のsummaryがあれば退勤済みとみなす）
-      const clockedOut = !!(todayData as any)?.summary;
+      let clockedOut = false;
+      try {
+        const reportRes = await fetch(`/api/daily-reports/get-by-date?date=${dateStr}`);
+        if (reportRes.ok) {
+          const reportData = await reportRes.json();
+          // セッション1のisCheckedOutフラグで退勤完了を判定
+          // isCheckedOutはSlackのclock_outリンクの有無で判定される
+          const session1 = reportData?.sessions?.find((s: { session_no: number }) => s.session_no === 1);
+          clockedOut = !!(session1?.isCheckedOut);
+        }
+      } catch {
+        // 日報取得に失敗しても続行
+      }
+
+      const session = detectCurrentSession(todayData);
 
       setAttendance(todayData);
       setCurrentSession(session);

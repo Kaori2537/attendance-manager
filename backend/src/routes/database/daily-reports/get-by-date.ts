@@ -277,10 +277,30 @@ route.get("/", async (c) => {
       });
     }
 
+    // ✅ 3.7) clock_out Slack linkの有無を確認（退勤完了判定用）
+    let checkoutLinksBySession: Record<string, boolean> = {};
+    if (reactionSessionIds.length > 0) {
+      const slackLinksRes = await sb
+        .from("daily_report_slack_links")
+        .select("daily_report_session_id")
+        .in("daily_report_session_id", reactionSessionIds)
+        .eq("kind", "clock_out");
+
+      if (slackLinksRes.error) {
+        console.error("daily_report_slack_links select error:", slackLinksRes.error);
+        // エラーでも続行（isCheckedOutがfalseになるだけ）
+      } else {
+        for (const link of slackLinksRes.data ?? []) {
+          checkoutLinksBySession[link.daily_report_session_id] = true;
+        }
+      }
+    }
+
     const sessionsWithTasksAndReactions = sessionsWithTasks.map((s: any) => ({
       ...s,
       reactions: reactionsBySession[s.id] ?? {},
       comments: commentsBySession[s.id] ?? [],
+      isCheckedOut: checkoutLinksBySession[s.id] ?? false,
     }));
 
     // 4) attendance（勤怠）を取得して組み立て（複数work_sessions対応）
