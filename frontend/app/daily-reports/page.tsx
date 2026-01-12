@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { DailyReportsCalendarPanel } from "./components/DailyReportsCalendarPanel";
 import { DailyReportSummaryCard } from "./components/DailyReportSummaryCard";
@@ -24,6 +24,7 @@ function parseYmd(ymd: string): Date | null {
 export default function Page() {
   const searchParams = useSearchParams();
   const dateParam = searchParams.get("date");
+  const initializedRef = useRef(false);
 
   const {
     currentMonth,
@@ -33,11 +34,13 @@ export default function Page() {
     dailyReportDates,
   } = useDailyReportsCalendar();
 
-  // URLのdateパラメータからカレンダーの日付を設定
+  // URLのdateパラメータからカレンダーの日付を設定（初回のみ）
   useEffect(() => {
+    if (initializedRef.current) return;
     if (dateParam) {
       const parsedDate = parseYmd(dateParam);
       if (parsedDate) {
+        initializedRef.current = true;
         setSelectedDate(parsedDate);
         // カレンダーの月も合わせる
         setCurrentMonth(new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1));

@@ -123,4 +123,30 @@ route.put("/read-all", async (c) => {
   }
 });
 
+// 通知を削除する
+route.delete("/:notificationId", async (c) => {
+  try {
+    const notificationId = c.req.param("notificationId");
+    if (!notificationId) return c.json({ ok: false, error: "notificationId is required" }, 400);
+
+    const guard = await requireAuth(c);
+    if (!guard.ok) return guard.res;
+
+    const sb = getSupabaseAdminClient(c.env);
+
+    const { error } = await sb
+      .from("notifications")
+      .delete()
+      .eq("id", notificationId)
+      .eq("user_id", guard.payload.id); // 自分の通知のみ削除可能
+
+    if (error) throw new Error(`notifications delete: ${error.message}`);
+
+    return c.json({ ok: true });
+  } catch (e: any) {
+    console.error("[notifications] DELETE error:", e);
+    return c.json({ ok: false, error: e?.message ?? String(e) }, 500);
+  }
+});
+
 export default route;

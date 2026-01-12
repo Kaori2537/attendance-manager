@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Bell } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -28,6 +28,12 @@ export function NotificationBell({ apiToken }: { apiToken: string }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // クライアントサイドでのみマウント（ハイドレーションミスマッチ回避）
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     if (!apiToken) return;
@@ -71,6 +77,23 @@ export function NotificationBell({ apiToken }: { apiToken: string }) {
     }
   }, [apiToken]);
 
+  const markAllRead = useCallback(async () => {
+    if (!apiToken) return;
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/database/notifications/read-all`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${apiToken}` },
+        }
+      );
+      setUnreadCount(0);
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (e) {
+      console.error("Failed to mark all as read:", e);
+    }
+  }, [apiToken]);
+
   // 初回とポーリング
   useEffect(() => {
     fetchUnreadCount();
@@ -78,12 +101,16 @@ export function NotificationBell({ apiToken }: { apiToken: string }) {
     return () => clearInterval(interval);
   }, [fetchUnreadCount]);
 
-  // Popoverを開いたときに通知一覧を取得
+  // Popoverを開いたときに通知一覧を取得、閉じたときに既読にする
   useEffect(() => {
     if (open) {
       fetchNotifications();
+    } else if (unreadCount > 0) {
+      // 閉じたときに未読があれば全て既読にする
+      markAllRead();
     }
-  }, [open, fetchNotifications]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, fetchNotifications, markAllRead]);
 
   const handleNotificationClick = async (notification: Notification) => {
     // 既読にする
@@ -112,21 +139,35 @@ export function NotificationBell({ apiToken }: { apiToken: string }) {
     }
   };
 
-  const handleMarkAllRead = async () => {
+  const handleDeleteNotification = async (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation(); // 親のクリックイベントを防ぐ
     try {
       await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/database/notifications/read-all`,
+        `${process.env.NEXT_PUBLIC_API_URL}/database/notifications/${notificationId}`,
         {
-          method: "PUT",
+          method: "DELETE",
           headers: { Authorization: `Bearer ${apiToken}` },
         }
       );
-      setUnreadCount(0);
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      // 削除した通知が未読だった場合はカウントも減らす
+      const deletedNotification = notifications.find((n) => n.id === notificationId);
+      if (deletedNotification && !deletedNotification.read) {
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
+      setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
     } catch (e) {
-      console.error("Failed to mark all as read:", e);
+      console.error("Failed to delete notification:", e);
     }
   };
+
+  // SSRではプレースホルダーを表示（ハイドレーションミスマッチ回避）
+  if (!mounted) {
+    return (
+      <Button variant="ghost" size="icon" className="relative">
+        <Bell className="h-5 w-5" />
+      </Button>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -141,16 +182,8 @@ export function NotificationBell({ apiToken }: { apiToken: string }) {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="end">
-        <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="border-b px-4 py-3">
           <h3 className="font-medium">通知</h3>
-          {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              className="text-xs text-blue-600 hover:underline"
-            >
-              すべて既読にする
-            </button>
-          )}
         </div>
 
         <div className="max-h-80 overflow-y-auto">
@@ -166,13 +199,20 @@ export function NotificationBell({ apiToken }: { apiToken: string }) {
             <ul>
               {notifications.map((n) => (
                 <li key={n.id}>
-                  <button
-                    onClick={() => handleNotificationClick(n)}
-                    className={`w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors border-b last:border-b-0 ${
+                  <div
+                    className={`relative group px-4 py-3 hover:bg-muted/50 transition-colors border-b last:border-b-0 cursor-pointer ${
                       !n.read ? "bg-blue-50" : ""
                     }`}
+                    onClick={() => handleNotificationClick(n)}
                   >
-                    <div className="flex items-start gap-2">
+                    <button
+                      onClick={(e) => handleDeleteNotification(e, n.id)}
+                      className="absolute top-2 right-2 p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="削除"
+                    >
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                    <div className="flex items-start gap-2 pr-6">
                       {!n.read && (
                         <span className="mt-1.5 h-2 w-2 rounded-full bg-blue-500 shrink-0" />
                       )}
@@ -191,7 +231,7 @@ export function NotificationBell({ apiToken }: { apiToken: string }) {
                         </p>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 </li>
               ))}
             </ul>
