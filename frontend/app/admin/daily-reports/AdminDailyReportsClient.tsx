@@ -559,12 +559,12 @@ export default function AdminDailyReportsClient({
           );
         })()
       ) : (
-        /* 特定ユーザー・月ごとビュー: ユーザーごとにまとめて表示（折り畳み式） */
-        <div className="space-y-8">
-          {filteredUsersWithReports.map((user) => {
-            // ユーザーのセッションをフラット化
-            const userSessions: FlatSession[] = user.reports
-              .flatMap((report) =>
+        /* 特定ユーザー・月ごとビュー: 全ユーザーと同じUI（セッション単位で表示） */
+        (() => {
+          // 選択ユーザーのセッションをフラット化
+          const userSessions: FlatSession[] = filteredUsersWithReports
+            .flatMap((user) =>
+              user.reports.flatMap((report) =>
                 report.sessions
                   .filter((s) => s.summary || s.troubles || s.tasks.some((t) => t.kind === "actual") || s.tasks.some((t) => t.kind === "planned"))
                   .map((session) => ({
@@ -576,53 +576,36 @@ export default function AdminDailyReportsClient({
                     sessionCount: report.sessionCount,
                   }))
               )
-              .sort((a, b) => {
-                // 日付順、その後出勤時間順
-                const dateCompare = a.reportDate.localeCompare(b.reportDate);
-                if (dateCompare !== 0) return dateCompare;
-                if (a.clock_in && b.clock_in) {
-                  return new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime();
-                }
-                return 0;
-              });
+            )
+            .sort((a, b) => {
+              // 日付順、その後出勤時間順
+              const dateCompare = a.reportDate.localeCompare(b.reportDate);
+              if (dateCompare !== 0) return dateCompare;
+              if (a.clock_in && b.clock_in) {
+                return new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime();
+              }
+              return 0;
+            });
 
-            return (
-              <div key={user.id} className="space-y-4">
-                {/* User Header */}
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarFallback>
-                      <UserIcon className="h-6 w-6" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="font-medium">{user.name}</div>
-                    <div className="text-sm text-muted-foreground">{user.email}</div>
-                  </div>
+          return (
+            <div className="space-y-4">
+              {userSessions.map((session) => (
+                <TimelineSessionCard
+                  key={session.id}
+                  session={session}
+                  apiToken={apiToken}
+                  showDate={true}
+                />
+              ))}
+
+              {userSessions.length === 0 && (
+                <div className="rounded-xl border p-12 text-center text-muted-foreground">
+                  この期間に日報を投稿したユーザーはいません
                 </div>
-
-                {/* Sessions */}
-                <div className="space-y-4">
-                  {userSessions.map((session) => (
-                    <TimelineSessionCard
-                      key={session.id}
-                      session={session}
-                      apiToken={apiToken}
-                      showDate={true}
-                      hideUserName={true}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-
-          {filteredUsersWithReports.length === 0 && (
-            <div className="rounded-xl border p-12 text-center text-muted-foreground">
-              この期間に日報を投稿したユーザーはいません
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()
       )}
     </div>
   );
@@ -762,29 +745,21 @@ function TimelineSessionCard({
     <div className="rounded-xl border bg-card p-6">
       {/* Header: ユーザー名 + セッション情報を横並び */}
       <div className="flex items-start gap-8">
-        {/* 左: ユーザー名（固定幅で縦並びを揃える）+ 月ごと時は日付も表示 */}
-        {!hideUserName && (
-          <div className="shrink-0 w-[120px]">
+        {/* 左: ユーザー名 + 日付（月ごと時） */}
+        <div className="shrink-0 w-[140px]">
+          {!hideUserName && (
             <div className="flex items-center gap-2 text-sm font-medium h-8">
               <UserIcon className="h-4 w-4 shrink-0" />
               <span className="truncate">{session.userName}</span>
             </div>
-            {showDate && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                <CalendarIcon className="h-3 w-3" />
-                {session.reportDate}（{dayOfWeek}）
-              </div>
-            )}
-          </div>
-        )}
-        {hideUserName && showDate && (
-          <div className="shrink-0 w-[120px]">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground h-8">
+          )}
+          {showDate && (
+            <div className={`flex items-center gap-2 text-sm text-muted-foreground ${!hideUserName ? "mt-1" : "h-8"}`}>
               <CalendarIcon className="h-4 w-4 shrink-0" />
               <span>{session.reportDate}（{dayOfWeek}）</span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* 右: セッション情報 + コンテンツ */}
         <div className="flex-1 min-w-0">
